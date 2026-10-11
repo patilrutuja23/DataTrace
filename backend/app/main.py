@@ -12,6 +12,12 @@ from app.quality.quality_engine import calculate_quality
 from app.database.connection import SessionLocal, engine, Base
 from app.database.models import DatasetRecord
 from app.database import models
+from app.database.models import LineageNode, LineageEdge
+from app.lineage.lineage_service import (
+    create_dataset_lineage,
+    get_dataset_lineage,
+)
+
 
 app = FastAPI(
     title="DataTrace API",
@@ -151,3 +157,47 @@ def get_dataset(
         "quality": record.quality,
         "created_at": record.created_at,
     }
+
+
+
+@app.post("/api/datasets/{dataset_id}/lineage")
+def create_lineage_endpoint(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    try:
+        lineage = create_dataset_lineage(db, dataset)
+        db.commit()
+        return lineage
+
+    except Exception as exc:
+        db.rollback()
+        print(f"Error creating lineage: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create dataset lineage.",
+        ) from exc
+
+
+@app.get("/api/datasets/{dataset_id}/lineage")
+def get_lineage_endpoint(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    return get_dataset_lineage(db, dataset_id)
