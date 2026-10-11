@@ -1,0 +1,21 @@
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: datatrace-postgres
+    environment:
+      POSTGRES_USER: datatrace
+      POSTGRES_PASSWORD: datatrace_dev
+      POSTGRES_DB: datatrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datatrace -d datatrace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

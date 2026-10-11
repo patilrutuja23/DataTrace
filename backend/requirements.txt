@@ -3,3 +3,6 @@ fastapi
 uvicorn
 pandas
 python-multipart
+sqlalchemy
+psycopg[binary]
+python-dotenv

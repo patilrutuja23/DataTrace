@@ -1,18 +1,43 @@
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 import pandas as pd
+import io
 
 from app.ingestion.csv_reader import read_csv_file
 from app.profiling.profiler import generate_profile
 from app.quality.quality_engine import calculate_quality
-
+from app.database.connection import SessionLocal, engine, Base
+from app.database.models import DatasetRecord
+from app.database import models
 
 app = FastAPI(
     title="DataTrace API",
-    description="Data profiling and data quality analysis",
-    version="1.0.0",
+    description="Data profiling, data quality analysis and storage",
+    version="2.0.0",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try: 
+        yield db
+    finally:
+        db.close()
+        
 
 @app.get("/")
 def home():
@@ -23,49 +48,106 @@ def home():
 
 
 @app.post("/api/datasets/analyze")
-async def analyze_dataset(file: UploadFile = File(...)):
+async def analyze_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(
             status_code=400,
             detail="Please upload a CSV file.",
         )
+    
+    file_bytes = await file.read()
 
     try:
-        file_bytes = await file.read()
-
-        if not file_bytes:
-            raise HTTPException(
-                status_code=400,
-                detail="The uploaded file is empty.",
-            )
-
         df = read_csv_file(file_bytes)
-
-        if len(df.columns) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="The CSV contains no columns.",
-            )
-
-        profile = generate_profile(df)
-        quality = calculate_quality(df)
-
-        return {
-            "dataset": file.filename,
-            "profile": profile,
-            "quality": quality,
-        }
-
-    except HTTPException:
-        raise
-    except (
-        pd.errors.ParserError,
-        UnicodeDecodeError,
-        ValueError,
-    ) as exc:
+        
+    except (pd.errors.ParserError, UnicodeDecodeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"Unable to process CSV: {exc}",
+            detail="Could not read the CSV file.",
         ) from exc
-    finally:
-        await file.close()
+        
+    profile = generate_profile(df)
+    quality = calculate_quality(df)
+    
+    record = DatasetRecord(
+        filename=file.filename,
+        row_count=len(df),
+        column_count=len(df.columns),
+        profile=profile,
+        quality=quality,
+        quality_score=quality["quality_score"],
+        quality_status=quality["status"],
+    )
+    
+    try:
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    except Exception as exc: 
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save the analysis to the database.",
+        ) from exc
+        
+    return {
+        "id": record.id,
+        "dataset": record.filename,
+        "profile": record.profile,
+        "quality": record.quality,
+        "created_at": record.created_at,
+    }
+    
+
+@app.get("/api/datasets")
+def list_datasets(db: Session = Depends(get_db)):
+    try:
+        records = db.scalars(
+            select(DatasetRecord).order_by(DatasetRecord.id.desc())
+        ).all()
+
+        result = []
+
+        for record in records:
+            result.append({
+                "id": record.id,
+                "filename": record.filename,
+                "row_count": record.row_count,
+                "column_count": record.column_count,
+                "quality_score": record.quality_score,
+                "quality_status": record.quality_status,
+                "created_at": record.created_at,
+            })
+
+        return result
+
+    except Exception as exc:
+        print(f"Error listing datasets: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve datasets."
+        ) from exc
+
+    
+
+
+@app.get("/api/datasets/{dataset_id}")
+def get_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    record = db.get(DatasetRecord, dataset_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    return {
+        "id": record.id,
+        "dataset": record.filename,
+        "profile": record.profile,
+        "quality": record.quality,
+        "created_at": record.created_at,
+    }
