@@ -6,3 +6,4 @@ python-multipart
 sqlalchemy
 psycopg[binary]
 python-dotenv
+neo4j

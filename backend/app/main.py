@@ -17,6 +17,16 @@ from app.lineage.lineage_service import (
     create_dataset_lineage,
     get_dataset_lineage,
 )
+from app.graph.neo4j_client import (
+    driver as neo4j_driver,
+    close_neo4j_connection,
+    verify_neo4j_connection,
+)
+from app.graph.lineage_graph_service import (
+    sync_lineage_to_neo4j,
+    get_lineage_from_neo4j,
+)
+
 
 
 app = FastAPI(
@@ -44,6 +54,10 @@ def get_db():
     finally:
         db.close()
         
+
+@app.on_event("shutdown")
+def shutdown():
+    close_neo4j_connection()
 
 @app.get("/")
 def home():
@@ -201,3 +215,74 @@ def get_lineage_endpoint(
         )
 
     return get_dataset_lineage(db, dataset_id)
+
+
+
+
+@app.post("/api/datasets/{dataset_id}/lineage/sync")
+def sync_lineage_endpoint(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    try:
+        verify_neo4j_connection()
+
+        result = sync_lineage_to_neo4j(
+            db=db,
+            driver=neo4j_driver,
+            dataset_id=dataset_id,
+        )
+
+        if result["nodes_synced"] == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Create PostgreSQL lineage before syncing to Neo4j.",
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Neo4j sync error: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not synchronize lineage to Neo4j.",
+        ) from exc
+
+
+@app.get("/api/datasets/{dataset_id}/lineage/graph")
+def get_neo4j_lineage_endpoint(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    try:
+        verify_neo4j_connection()
+
+        return get_lineage_from_neo4j(
+            driver=neo4j_driver,
+            dataset_id=dataset_id,
+        )
+
+    except Exception as exc:
+        print(f"Neo4j query error: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not retrieve lineage from Neo4j.",
+        ) from exc
