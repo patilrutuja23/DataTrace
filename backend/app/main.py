@@ -2,7 +2,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, delete
 import pandas as pd
 import io
 
@@ -10,7 +10,8 @@ from app.ingestion.csv_reader import read_csv_file
 from app.profiling.profiler import generate_profile
 from app.quality.quality_engine import calculate_quality
 from app.database.connection import SessionLocal, engine, Base
-from app.database.models import DatasetRecord
+from app.database.models import DatasetRecord, AnomalyRecord
+from app.anomaly.anomaly_engine import detect_anomalies
 from app.database import models
 from app.database.models import LineageNode, LineageEdge
 from app.lineage.lineage_service import (
@@ -286,3 +287,113 @@ def get_neo4j_lineage_endpoint(
             status_code=503,
             detail="Could not retrieve lineage from Neo4j.",
         ) from exc
+
+@app.post("/api/datasets/{dataset_id}/anomalies")
+async def analyze_anomalies(
+    dataset_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only CSV files are supported.",
+        )
+
+    try:
+        file_bytes = await file.read()
+        df = read_csv_file(file_bytes)
+
+        anomalies = detect_anomalies(df)
+
+        # Replace previous findings for this dataset.
+        db.execute(
+            delete(AnomalyRecord).where(
+                AnomalyRecord.dataset_id == dataset_id
+            )
+        )
+
+        records = [
+            AnomalyRecord(
+                dataset_id=dataset_id,
+                **anomaly,
+            )
+            for anomaly in anomalies
+        ]
+
+        db.add_all(records)
+        db.commit()
+
+        return {
+            "dataset_id": dataset_id,
+            "method": "IQR",
+            "anomaly_count": len(anomalies),
+            "anomalies": anomalies,
+        }
+
+    except (
+        pd.errors.ParserError,
+        pd.errors.EmptyDataError,
+        UnicodeDecodeError,
+        ValueError,
+    ) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Could not read or analyze the CSV file.",
+        ) from exc
+
+    except Exception as exc:
+        db.rollback()
+        print(f"Anomaly detection error: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save anomaly results.",
+        ) from exc
+
+@app.get("/api/datasets/{dataset_id}/anomalies")
+def get_anomalies(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    records = db.scalars(
+        select(AnomalyRecord)
+        .where(AnomalyRecord.dataset_id == dataset_id)
+        .order_by(AnomalyRecord.id)
+    ).all()
+
+    return {
+        "dataset_id": dataset_id,
+        "anomaly_count": len(records),
+        "anomalies": [
+            {
+                "id": record.id,
+                "column_name": record.column_name,
+                "row_index": record.row_index,
+                "observed_value": record.observed_value,
+                "lower_bound": record.lower_bound,
+                "upper_bound": record.upper_bound,
+                "direction": record.direction,
+                "severity": record.severity,
+                "method": record.method,
+                "detected_at": record.detected_at,
+            }
+            for record in records
+        ],
+    }
