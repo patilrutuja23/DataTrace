@@ -80,3 +80,32 @@ class LineageEdge(Base):
     )
     
     relationship = Column(String(50), nullable=False)
+    
+class AnomalyRecord(Base):
+    __tablename__ = "anomalies"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    dataset_id = Column(
+        Integer,
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    column_name = Column(String(255), nullable=False)
+    row_index = Column(Integer, nullable=False)
+
+    observed_value = Column(Float, nullable=False)
+    lower_bound = Column(Float, nullable=False)
+    upper_bound = Column(Float, nullable=False)
+
+    direction = Column(String(20), nullable=False)
+    severity = Column(String(20), nullable=False)
+    method = Column(String(20), nullable=False)
+
+    detected_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
