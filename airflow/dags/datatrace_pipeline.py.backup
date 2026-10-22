@@ -1,0 +1,287 @@
+
+from datetime import datetime
+import json
+import urllib.error
+import urllib.request
+import mimetypes
+from pathlib import Path
+
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+BASE_URL = "http://host.docker.internal:8000"
+
+
+def api_request(path, method="GET"):
+    """Call the DataTrace backend and return its JSON response."""
+    url = f"{BASE_URL}{path}"
+    request = urllib.request.Request(url, method=method)
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8")
+            print(f"{method} {url} -> HTTP {response.status}")
+            return json.loads(body) if body else {}
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"DataTrace API returned HTTP {exc.code}: {details}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Could not connect to DataTrace backend: {exc}"
+        ) from exc
+
+
+def check_backend():
+    result = api_request("/")
+    if result.get("status") != "running":
+        raise RuntimeError(f"Unexpected backend response: {result}")
+    print("DataTrace backend is running.")
+
+
+def create_lineage(**context):
+    conf = context["dag_run"].conf or {}
+    dataset_id = conf.get("dataset_id")
+
+    if dataset_id is None:
+        raise ValueError(
+            "Missing dataset_id. Trigger this DAG with "
+            '{"dataset_id": 46} (replace 46 with your dataset ID).'
+        )
+
+    dataset_id = int(dataset_id)
+
+    # Confirm the dataset exists before changing its lineage.
+    dataset = api_request(f"/api/datasets/{dataset_id}")
+    print(f"Dataset confirmed: {dataset}")
+
+    result = api_request(
+        f"/api/datasets/{dataset_id}/lineage",
+        method="POST",
+    )
+    print(f"Lineage creation result: {result}")
+
+    context["ti"].xcom_push(key="dataset_id", value=dataset_id)
+
+
+def sync_lineage(**context):
+    dataset_id = context["ti"].xcom_pull(
+        task_ids="create_lineage",
+        key="dataset_id",
+    )
+
+    result = api_request(
+        f"/api/datasets/{dataset_id}/lineage/sync",
+        method="POST",
+    )
+    print(f"Neo4j synchronization result: {result}")
+
+
+
+def verify_lineage(**context):
+    dataset_id = context["ti"].xcom_pull(
+        task_ids="create_lineage",
+        key="dataset_id",
+    )
+
+    result = api_request(
+        f"/api/datasets/{dataset_id}/lineage/graph"
+    )
+
+    print("Lineage graph response:")
+    print(json.dumps(result, indent=2))
+
+    if not isinstance(result, dict):
+        raise RuntimeError(
+            f"Expected a JSON object but received: {type(result).__name__}"
+        )
+
+    print(f"Lineage graph verified for dataset {dataset_id}.")
+    return result
+
+
+def detect_anomalies(**context):
+    conf = context["dag_run"].conf or {}
+    dataset_id = conf.get("dataset_id")
+
+    if dataset_id is None:
+        raise ValueError('Missing dataset_id. Trigger with {"dataset_id": 49}.')
+
+    dataset_id = int(dataset_id)
+    file_path = Path("/opt/airflow/data/orders.csv")
+
+    if not file_path.is_file():
+        raise FileNotFoundError(f"CSV file not found: {file_path}")
+
+    # Send the CSV as multipart/form-data to the existing backend API.
+    boundary = "----DataTraceAirflowBoundary"
+    filename = file_path.name
+    content_type = mimetypes.guess_type(filename)[0] or "text/csv"
+    file_bytes = file_path.read_bytes()
+
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    url = f"{BASE_URL}/api/datasets/{dataset_id}/anomalies"
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Anomaly API returned HTTP {exc.code}: {details}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not connect to DataTrace backend: {exc}") from exc
+
+    print("Anomaly detection response:")
+    print(json.dumps(result, indent=2))
+
+    if result.get("dataset_id") != dataset_id:
+        raise RuntimeError("Anomaly response contains an unexpected dataset ID.")
+
+    context["ti"].xcom_push(key="dataset_id", value=dataset_id)
+
+
+def verify_anomalies(**context):
+    dataset_id = context["ti"].xcom_pull(
+        task_ids="detect_anomalies",
+        key="dataset_id",
+    )
+
+    result = api_request(f"/api/datasets/{dataset_id}/anomalies")
+
+    print("Saved anomaly results:")
+    print(json.dumps(result, indent=2))
+
+    if not isinstance(result, dict):
+        raise RuntimeError("Unexpected anomaly API response.")
+
+    print(f"Anomaly results verified for dataset {dataset_id}.")
+    return result
+
+
+def investigate_dataset(**context):
+    dataset_id = context["ti"].xcom_pull(
+        task_ids="detect_anomalies",
+        key="dataset_id",
+    )
+
+    if dataset_id is None:
+        raise ValueError("Dataset ID was not passed from anomaly detection.")
+
+    result = api_request(f"/api/datasets/{dataset_id}/investigate")
+
+    print("Combined investigation response:")
+    print(json.dumps(result, indent=2))
+
+    if result.get("dataset_id") != int(dataset_id):
+        raise RuntimeError("Investigation returned an unexpected dataset ID.")
+
+    if "root_cause_analysis" not in result:
+        raise RuntimeError("Investigation response is missing RCA results.")
+
+    if "impact_analysis" not in result:
+        raise RuntimeError("Investigation response is missing impact results.")
+
+    context["ti"].xcom_push(
+        key="dataset_id",
+        value=int(dataset_id),
+    )
+
+
+def verify_rca_impact(**context):
+    dataset_id = context["ti"].xcom_pull(
+        task_ids="investigate_dataset",
+        key="dataset_id",
+    )
+
+    rca = api_request(f"/api/datasets/{dataset_id}/rca")
+    impact = api_request(f"/api/datasets/{dataset_id}/impact")
+
+    print("Root cause analysis:")
+    print(json.dumps(rca, indent=2))
+
+    print("Impact analysis:")
+    print(json.dumps(impact, indent=2))
+
+    if rca.get("dataset_id") != int(dataset_id):
+        raise RuntimeError("RCA returned an unexpected dataset ID.")
+
+    if not isinstance(rca.get("findings"), list):
+        raise RuntimeError("RCA response has an invalid findings field.")
+
+    if impact.get("dataset_id") != int(dataset_id):
+        raise RuntimeError("Impact analysis returned an unexpected dataset ID.")
+
+    if not isinstance(impact.get("impacted_assets"), list):
+        raise RuntimeError("Impact response has an invalid impacted_assets field.")
+
+    print(
+        f"RCA verified: {len(rca['findings'])} findings; "
+        f"impact verified: {len(impact['impacted_assets'])} assets."
+    )
+
+
+with DAG(
+    dag_id="datatrace_pipeline",
+    description="Orchestrates DataTrace lineage and Neo4j synchronization",
+    start_date=datetime(2026, 1, 1),
+    schedule=None,
+    catchup=False,
+    tags=["datatrace", "lineage", "neo4j"],
+) as dag:
+
+    backend_check = PythonOperator(
+        task_id="check_backend",
+        python_callable=check_backend,
+    )
+
+    lineage = PythonOperator(
+        task_id="create_lineage",
+        python_callable=create_lineage,
+    )
+
+    neo4j_sync = PythonOperator(
+        task_id="sync_lineage_to_neo4j",
+        python_callable=sync_lineage,
+    )
+
+    verify = PythonOperator(
+        task_id="verify_lineage",
+        python_callable=verify_lineage,
+    )
+    anomaly_detection = PythonOperator(
+        task_id="detect_anomalies",
+        python_callable=detect_anomalies,
+    )
+
+    anomaly_verification = PythonOperator(
+        task_id="verify_anomalies",
+        python_callable=verify_anomalies,
+    )
+    
+    investigation = PythonOperator(
+        task_id="investigate_dataset",
+        python_callable=investigate_dataset,
+    )
+
+    rca_impact_verification = PythonOperator(
+        task_id="verify_rca_impact",
+        python_callable=verify_rca_impact,
+    )
+
+    backend_check >> lineage >> neo4j_sync >> verify
+    verify >> anomaly_detection >> anomaly_verification
+    anomaly_verification >> investigation >> rca_impact_verification

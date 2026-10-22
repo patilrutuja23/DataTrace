@@ -1,0 +1,69 @@
+{"timestamp":"2026-10-22T09:58:43.576863Z","level":"info","event":"::group::Pre Execute","logger":"task","filename":"task_runner.py","lineno":2412}
+{"timestamp":"2026-10-22T09:58:43.679856Z","level":"info","event":"DAG bundles loaded: dags-folder, example_dags, apache-airflow-providers-common-sql-example-dags, apache-airflow-providers-standard-example-dags","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":304}
+{"timestamp":"2026-10-22T09:58:43.687234Z","level":"info","event":"Filling up the DagBag from /opt/airflow/dags/datatrace_pipeline.py","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"airflow.dag_processing.dagbag.BundleDagBag","filename":"dagbag.py","lineno":460}
+{"timestamp":"2026-10-22T09:58:43.770520Z","level":"warning","event":"The `airflow.operators.python.PythonOperator` attribute is deprecated. Please use `'airflow.providers.standard.operators.python.PythonOperator'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":10,"dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-22T09:58:43.771189Z","level":"warning","event":"The `airflow.utils.trigger_rule.TriggerRule` attribute is deprecated. Please use `'airflow.task.trigger_rule.TriggerRule'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":11,"dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-22T09:58:43.773164Z","level":"info","event":"Worker startup parse complete","bundle_name":"dags-folder","bundle_version":null,"dag_file":"datatrace_pipeline.py","dag_id":"datatrace_pipeline","bundle_prepare_ms":13,"dag_file_parse_ms":86,"task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1073}
+{"timestamp":"2026-10-22T09:58:43.852414Z","level":"info","event":"Task instance is in running state","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:43.862663Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.QUEUED","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:43.864456Z","level":"info","event":"Current task name:verify_lineage","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:43.865608Z","level":"info","event":"Dag name:datatrace_pipeline","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:43.854977Z","level":"info","event":"::endgroup::","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2232}
+{"timestamp":"2026-10-22T09:58:46.924631Z","level":"info","event":"GET http://host.docker.internal:8000/api/datasets/88/lineage/graph -> HTTP 200","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.925803Z","level":"info","event":"Lineage graph response:","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.933605Z","level":"info","event":"{","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.938655Z","level":"info","event":"  \"dataset_id\": 88,","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.941810Z","level":"info","event":"  \"nodes\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.943607Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.944802Z","level":"info","event":"      \"node_key\": \"dataset:88:output\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.945979Z","level":"info","event":"      \"name\": \"Dataset Analysis #88\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.947012Z","level":"info","event":"      \"type\": \"OUTPUT\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.948136Z","level":"info","event":"      \"properties\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.949079Z","level":"info","event":"        \"row_count\": 12495,","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.950104Z","level":"info","event":"        \"column_count\": 12,","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.951232Z","level":"info","event":"        \"quality_score\": 89.65,","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.952720Z","level":"info","event":"        \"quality_status\": \"WARNING\"","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.953827Z","level":"info","event":"      }","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.954815Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.956028Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.957032Z","level":"info","event":"      \"node_key\": \"dataset:88:pipeline\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.958083Z","level":"info","event":"      \"name\": \"DataTrace Analysis\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.959198Z","level":"info","event":"      \"type\": \"PIPELINE\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.960320Z","level":"info","event":"      \"properties\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.961358Z","level":"info","event":"        \"steps\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.962743Z","level":"info","event":"          \"CSV ingestion\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.963882Z","level":"info","event":"          \"Data profiling\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.965030Z","level":"info","event":"          \"Data quality analysis\"","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.966276Z","level":"info","event":"        ]","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.967453Z","level":"info","event":"      }","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.968966Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.970713Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.971808Z","level":"info","event":"      \"node_key\": \"dataset:88:source\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.973117Z","level":"info","event":"      \"name\": \"reviews.csv\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.974121Z","level":"info","event":"      \"type\": \"SOURCE\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.975181Z","level":"info","event":"      \"properties\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.976157Z","level":"info","event":"        \"filename\": \"reviews.csv\"","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.977203Z","level":"info","event":"      }","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.979031Z","level":"info","event":"    }","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.980239Z","level":"info","event":"  ],","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.981346Z","level":"info","event":"  \"edges\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.982963Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.984058Z","level":"info","event":"      \"source_key\": \"dataset:88:pipeline\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.986683Z","level":"info","event":"      \"target_key\": \"dataset:88:output\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.987821Z","level":"info","event":"      \"relationship\": \"PRODUCES\"","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.988886Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.990026Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.991025Z","level":"info","event":"      \"source_key\": \"dataset:88:source\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.992069Z","level":"info","event":"      \"target_key\": \"dataset:88:pipeline\",","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.993039Z","level":"info","event":"      \"relationship\": \"PROCESSED_BY\"","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.994144Z","level":"info","event":"    }","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.995154Z","level":"info","event":"  ]","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.996139Z","level":"info","event":"}","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.998942Z","level":"info","event":"Lineage graph verified for dataset 88.","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:46.925103Z","level":"info","event":"Done. Returned value was: {'dataset_id': 88, 'nodes': [{'node_key': 'dataset:88:output', 'name': 'Dataset Analysis #88', 'type': 'OUTPUT', 'properties': {'row_count': 12495, 'column_count': 12, 'quality_score': 89.65, 'quality_status': 'WARNING'}}, {'node_key': 'dataset:88:pipeline', 'name': 'DataTrace Analysis', 'type': 'PIPELINE', 'properties': {'steps': ['CSV ingestion', 'Data profiling', 'Data quality analysis']}}, {'node_key': 'dataset:88:source', 'name': 'reviews.csv', 'type': 'SOURCE', 'properties': {'filename': 'reviews.csv'}}], 'edges': [{'source_key': 'dataset:88:pipeline', 'target_key': 'dataset:88:output', 'relationship': 'PRODUCES'}, {'source_key': 'dataset:88:source', 'target_key': 'dataset:88:pipeline', 'relationship': 'PROCESSED_BY'}]}","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":233}
+{"timestamp":"2026-10-22T09:58:46.925501Z","level":"info","event":"::group::Post Execute","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1580}
+{"timestamp":"2026-10-22T09:58:46.925973Z","level":"info","event":"Pushing xcom","ti":"RuntimeTaskInstance(id=UUID('01a1630b-fbe4-7a7b-b5b6-df96e45a367f'), task_id='verify_lineage', dag_id='datatrace_pipeline', run_id='manual__2026-10-22T09:58:12.107924+00:00', try_number=1, dag_version_id=UUID('01a16153-5a1d-7941-a189-eaf93e57429a'), map_index=-1, hostname='65a893ad742b', context_carrier={'traceparent': '00-5986fd961234243a55199d7b9d75ba21-aa2d6e04516e5ad4-00'}, queue='default', task=<Task(PythonOperator): verify_lineage>, bundle_instance=LocalDagBundle(name=dags-folder), max_tries=0, start_date=datetime.datetime(2026, 10, 22, 9, 58, 43, 604245, tzinfo=datetime.timezone.utc), end_date=None, state=<TaskInstanceState.RUNNING: 'running'>, is_mapped=False, rendered_map_index=None, sentry_integration='sentry_sdk.integrations.celery.CeleryIntegration')","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2280}
+{"timestamp":"2026-10-22T09:58:47.162869Z","level":"info","event":"Task instance in success state","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:47.164142Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.RUNNING","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:47.165524Z","level":"info","event":"Task operator:<Task(PythonOperator): verify_lineage>","logger":"task.stdout"}
+{"timestamp":"2026-10-22T09:58:47.165019Z","level":"info","event":"::endgroup::","dag_id":"datatrace_pipeline","task_id":"verify_lineage","map_index":-1,"run_id":"manual__2026-10-22T09:58:12.107924+00:00","ti_id":"01a1630b-fbe4-7a7b-b5b6-df96e45a367f","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2379}

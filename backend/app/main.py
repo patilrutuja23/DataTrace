@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 import pandas as pd
 import io
+from pydantic import BaseModel, Field
+from pathlib import Path
+
 
 from app.ingestion.csv_reader import read_csv_file
 from app.profiling.profiler import generate_profile
@@ -27,6 +30,11 @@ from app.graph.lineage_graph_service import (
     sync_lineage_to_neo4j,
     get_lineage_from_neo4j,
 )
+from app.database.models import AnomalyRecord
+from app.rca.rca_engine import analyze_root_cause
+from app.graph.impact_service import get_downstream_impact
+from app.database import models
+from app.database.models import AnomalyRecord, PipelineExecutionRecord
 
 
 
@@ -35,6 +43,8 @@ app = FastAPI(
     description="Data profiling, data quality analysis and storage",
     version="2.0.0",
 )
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,6 +69,19 @@ def get_db():
 @app.on_event("shutdown")
 def shutdown():
     close_neo4j_connection()
+    
+    
+
+class PipelineExecutionPayload(BaseModel):
+    dataset_id: int
+    dag_id: str
+    dag_run_id: str
+    state: str
+    task_states: dict = Field(default_factory=dict)
+    started_at: str | None = None
+    finished_at: str | None = None
+    error_summary: str | None = None
+
 
 @app.get("/")
 def home():
@@ -100,25 +123,40 @@ async def analyze_dataset(file: UploadFile = File(...), db: Session = Depends(ge
         quality_status=quality["status"],
     )
     
+    saved_path = None
+
     try:
         db.add(record)
+        db.flush()  # Assign the dataset ID before committing.
+
+        saved_path = UPLOAD_DIR / f"dataset_{record.id}.csv"
+        saved_path.write_bytes(file_bytes)
+
         db.commit()
         db.refresh(record)
-    except Exception as exc: 
+
+    except Exception as exc:
         db.rollback()
+
+        if saved_path is not None and saved_path.exists():
+            saved_path.unlink()
+
         raise HTTPException(
             status_code=500,
-            detail="Could not save the analysis to the database.",
-        ) from exc
-        
+            detail="Could not save the dataset and its original CSV file.",
+        ) from exc 
     return {
         "id": record.id,
-        "dataset": record.filename,
+        "dataset_id": record.id,
+        "filename": record.filename,
+        "row_count": record.row_count,
+        "column_count": record.column_count,
         "profile": record.profile,
         "quality": record.quality,
+        "quality_score": record.quality_score,
+        "quality_status": record.quality_status,
         "created_at": record.created_at,
-    }
-    
+    }   
 
 @app.get("/api/datasets")
 def list_datasets(db: Session = Depends(get_db)):
@@ -288,10 +326,11 @@ def get_neo4j_lineage_endpoint(
             detail="Could not retrieve lineage from Neo4j.",
         ) from exc
 
+
 @app.post("/api/datasets/{dataset_id}/anomalies")
 async def analyze_anomalies(
     dataset_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ):
     dataset = db.get(DatasetRecord, dataset_id)
@@ -302,19 +341,34 @@ async def analyze_anomalies(
             detail="Dataset analysis not found.",
         )
 
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only CSV files are supported.",
-        )
-
     try:
-        file_bytes = await file.read()
-        df = read_csv_file(file_bytes)
+        if file is not None:
+            # Preserve support for manually uploaded CSV files.
+            if not file.filename or not file.filename.lower().endswith(".csv"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Only CSV files are supported.",
+                )
+            file_bytes = await file.read()
+        else:
+            # Airflow can analyze the original file by dataset ID.
+            stored_path = UPLOAD_DIR / f"dataset_{dataset_id}.csv"
 
+            if not stored_path.is_file():
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "Original CSV file not found for this dataset. "
+                        "Re-upload the CSV to enable dataset-specific "
+                        "anomaly detection."
+                    ),
+                )
+
+            file_bytes = stored_path.read_bytes()
+
+        df = read_csv_file(file_bytes)
         anomalies = detect_anomalies(df)
 
-        # Replace previous findings for this dataset.
         db.execute(
             delete(AnomalyRecord).where(
                 AnomalyRecord.dataset_id == dataset_id
@@ -334,11 +388,14 @@ async def analyze_anomalies(
 
         return {
             "dataset_id": dataset_id,
+            "filename": dataset.filename,
             "method": "IQR",
             "anomaly_count": len(anomalies),
             "anomalies": anomalies,
         }
 
+    except HTTPException:
+        raise
     except (
         pd.errors.ParserError,
         pd.errors.EmptyDataError,
@@ -350,7 +407,6 @@ async def analyze_anomalies(
             status_code=400,
             detail="Could not read or analyze the CSV file.",
         ) from exc
-
     except Exception as exc:
         db.rollback()
         print(f"Anomaly detection error: {exc}")
@@ -358,6 +414,8 @@ async def analyze_anomalies(
             status_code=500,
             detail="Could not save anomaly results.",
         ) from exc
+
+
 
 @app.get("/api/datasets/{dataset_id}/anomalies")
 def get_anomalies(
@@ -396,4 +454,222 @@ def get_anomalies(
             }
             for record in records
         ],
+    }
+
+
+
+
+@app.get("/api/datasets/{dataset_id}/rca")
+def get_root_cause(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    records = db.scalars(
+        select(AnomalyRecord).where(
+            AnomalyRecord.dataset_id == dataset_id
+        )
+    ).all()
+
+    anomalies = [
+        {
+            "column_name": record.column_name,
+            "row_index": record.row_index,
+            "observed_value": record.observed_value,
+            "lower_bound": record.lower_bound,
+            "upper_bound": record.upper_bound,
+            "direction": record.direction,
+            "severity": record.severity,
+            "method": record.method,
+        }
+        for record in records
+    ]
+
+    dataset_data = {
+        "id": dataset.id,
+        "filename": dataset.filename,
+        "profile": dataset.profile,
+        "quality": dataset.quality,
+    }
+
+    return analyze_root_cause(dataset_data, anomalies)
+
+
+
+@app.get("/api/datasets/{dataset_id}/impact")
+def get_dataset_impact(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    try:
+        verify_neo4j_connection()
+
+        return get_downstream_impact(
+            driver=neo4j_driver,
+            dataset_id=dataset_id,
+        )
+
+    except Exception as exc:
+        print(f"Impact analysis error: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not retrieve downstream impact from Neo4j.",
+        ) from exc
+
+
+
+@app.get("/api/datasets/{dataset_id}/investigate")
+def investigate_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    records = db.scalars(
+        select(AnomalyRecord).where(
+            AnomalyRecord.dataset_id == dataset_id
+        )
+    ).all()
+
+    anomalies = [
+        {
+            "column_name": record.column_name,
+            "row_index": record.row_index,
+            "observed_value": record.observed_value,
+            "lower_bound": record.lower_bound,
+            "upper_bound": record.upper_bound,
+            "direction": record.direction,
+            "severity": record.severity,
+            "method": record.method,
+        }
+        for record in records
+    ]
+
+    dataset_data = {
+        "id": dataset.id,
+        "filename": dataset.filename,
+        "profile": dataset.profile,
+        "quality": dataset.quality,
+    }
+
+    rca = analyze_root_cause(dataset_data, anomalies)
+
+    try:
+        verify_neo4j_connection()
+
+        impact = get_downstream_impact(
+            driver=neo4j_driver,
+            dataset_id=dataset_id,
+        )
+
+    except Exception as exc:
+        print(f"Investigation impact query failed: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not retrieve impact data from Neo4j.",
+        ) from exc
+
+    return {
+        "dataset_id": dataset_id,
+        "dataset": dataset.filename,
+        "anomaly_count": len(anomalies),
+        "root_cause_analysis": rca,
+        "impact_analysis": impact,
+    }
+
+
+
+@app.post("/api/datasets/{dataset_id}/pipeline-executions")
+def save_pipeline_execution(
+    dataset_id: int,
+    payload: PipelineExecutionPayload,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    if payload.dataset_id != dataset_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Dataset ID in the URL and payload must match.",
+        )
+
+    if not payload.dag_id.strip() or not payload.dag_run_id.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="dag_id and dag_run_id must not be empty.",
+        )
+
+    allowed_states = {"success", "failed", "running", "queued"}
+    if payload.state.lower() not in allowed_states:
+        raise HTTPException(
+            status_code=400,
+            detail=f"state must be one of {sorted(allowed_states)}.",
+        )
+
+    record = db.query(PipelineExecutionRecord).filter_by(
+        dag_run_id=payload.dag_run_id
+    ).first()
+
+    values = payload.model_dump(exclude={"dataset_id"})
+
+    if record is None:
+        record = PipelineExecutionRecord(
+            dataset_id=dataset_id,
+            **values,
+        )
+        db.add(record)
+    else:
+        if record.dataset_id != dataset_id:
+            raise HTTPException(
+                status_code=409,
+                detail="This DAG run ID is already associated with another dataset.",
+            )
+        for key, value in values.items():
+            setattr(record, key, value)
+
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "message": "Pipeline execution evidence saved.",
+        "id": record.id,
+        "dataset_id": record.dataset_id,
+        "dag_id": record.dag_id,
+        "dag_run_id": record.dag_run_id,
+        "state": record.state,
+        "task_states": record.task_states,
+        "started_at": record.started_at,
+        "finished_at": record.finished_at,
+        "error_summary": record.error_summary,
     }

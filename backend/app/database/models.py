@@ -109,3 +109,35 @@ class AnomalyRecord(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+
+
+class PipelineExecutionRecord(Base):
+    __tablename__ = "pipeline_execution_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    dataset_id = Column(
+        Integer,
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    dag_id = Column(String(255), nullable=False)
+    dag_run_id = Column(String(255), nullable=False, unique=True)
+    state = Column(String(50), nullable=False)
+
+    task_states = Column(JSON, nullable=False, default=dict)
+
+    started_at = Column(String(50), nullable=True)
+    finished_at = Column(String(50), nullable=True)
+
+    error_summary = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
