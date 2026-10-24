@@ -52,6 +52,7 @@ function App() {
   const [datasetId, setDatasetId] = useState('')
   const [detail, setDetail] = useState(null)
   const [anomalies, setAnomalies] = useState([])
+  const [anomalyMethod, setAnomalyMethod] = useState('IQR')
   const [lineage, setLineage] = useState(null)
   const [investigation, setInvestigation] = useState(null)
   const [impact, setImpact] = useState(null)
@@ -61,6 +62,12 @@ function App() {
 
   const selectedId = datasetId || result?.id || ''
   const quality = detail?.quality ?? result?.quality
+  const columnQualityRows = quality?.column_profiles ?? []
+  const whitespaceIssues = Object.entries(
+    quality?.whitespace_issues ?? {}
+  ).map(([column, count]) => ({ column, count }))
+
+  const duplicateColumnNames = quality?.duplicate_column_names ?? []
   const profile = detail?.profile ?? result?.profile
   const pageTitle = NAV_ITEMS.find((item) => item.id === page)?.label ?? 'Overview'
 
@@ -123,19 +130,49 @@ function App() {
     finally { setBusy(false) }
   }
 
-  async function detectAnomalies(event) {
-    event.preventDefault()
-    if (!selectedId) { setError('Analyze or select a dataset first.'); return }
-    if (!datasetFile) { setError('For anomaly detection, select the original CSV file for this dataset below. The backend needs the CSV again to run detection.'); return }
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const formData = new FormData(); formData.append('file', datasetFile)
-      const response = await api.post(`/api/datasets/${selectedId}/anomalies`, formData)
-      setAnomalies(response.data.anomalies ?? [])
-      setNotice(`Anomaly detection finished: ${response.data.anomaly_count ?? 0} findings.`)
-    } catch (err) { setError(errorText(err)) }
-    finally { setBusy(false) }
+
+async function detectAnomalies(event) {
+  event.preventDefault()
+
+  if (!selectedId) {
+    setError('Analyze or select a dataset first.')
+    return
   }
+
+  if (!datasetFile) {
+    setError(
+      'Select the original CSV file for this dataset before running detection.'
+    )
+    return
+  }
+
+  setBusy(true)
+  setError('')
+  setNotice('')
+
+  try {
+    const formData = new FormData()
+    formData.append('file', datasetFile)
+
+    const response = await api.post(
+      `/api/datasets/${selectedId}/anomalies`,
+      formData,
+      { params: { method: anomalyMethod } }
+    )
+
+    setAnomalies(response.data.anomalies ?? [])
+    setNotice(
+      `${response.data.method} detection finished: ${
+        response.data.anomaly_count ?? 0
+      } findings.`
+    )
+  } catch (err) {
+    setError(errorText(err))
+  } finally {
+    setBusy(false)
+  }
+}
+
 
   async function loadLineage() {
     if (!selectedId) return
@@ -232,12 +269,138 @@ function App() {
         </section>}
       </>}
 
-      {page === 'quality' && <section className="panel"><div className="panel-title"><div><h2>Data Quality Report</h2><p>Saved profile and quality metrics for the active dataset.</p></div><ShieldCheck size={22} /></div>
-        {!detail ? <EmptyState title="Select a dataset" detail="Analyze a CSV from Overview or choose an existing dataset." /> : <><div className="stats-grid compact-stats"><StatCard label="Quality score" value={`${quality?.quality_score ?? '—'}%`} note={quality?.status ?? 'Status unavailable'} icon={ShieldCheck} /><StatCard label="Missing cells" value={quality?.missing_cells ?? '—'} note="Across all columns" icon={AlertTriangle} /><StatCard label="Duplicate rows" value={quality?.duplicate_rows ?? '—'} note="Repeated rows" icon={Database} /><StatCard label="Total rows" value={profile?.row_count ?? '—'} note={`${profile?.column_count ?? 0} columns`} icon={BarChart3} /></div><h3>Column-level quality</h3><DataTable columns={[{ key: 'name', label: 'Column' }, { key: 'type', label: 'Data type' }, { key: 'missing', label: 'Missing values' }, { key: 'percent', label: 'Missing %', render: (_, row) => profile?.row_count ? `${((row.missing / profile.row_count) * 100).toFixed(1)}%` : '—' }]} rows={columnRows} emptyText="No column profile is saved." /></>}
-      </section>}
+      
+{page === 'quality' && <section className="panel">
+  <div className="panel-title">
+    <div>
+      <h2>Data Quality Report</h2>
+      <p>Saved profile and quality metrics for the active dataset.</p>
+    </div>
+    <ShieldCheck size={22} />
+  </div>
+
+  {!detail ? (
+    <EmptyState
+      title="Select a dataset"
+      detail="Analyze a CSV from Overview or choose a saved dataset."
+    />
+  ) : (
+    <>
+      <div className="stats-grid compact-stats">
+        <StatCard
+          label="Quality score"
+          value={`${quality?.quality_score ?? '—'}%`}
+          note={quality?.status ?? 'Status unavailable'}
+          icon={ShieldCheck}
+        />
+        <StatCard
+          label="Missing cells"
+          value={quality?.missing_cells ?? '—'}
+          note="Across all columns"
+          icon={AlertTriangle}
+        />
+        <StatCard
+          label="Duplicate rows"
+          value={quality?.duplicate_rows ?? '—'}
+          note="Repeated rows"
+          icon={Database}
+        />
+        <StatCard
+          label="Total rows"
+          value={profile?.row_count ?? '—'}
+          note={`${profile?.column_count ?? 0} columns`}
+          icon={BarChart3}
+        />
+      </div>
+
+      <h3>Column-level quality</h3>
+      <DataTable
+        columns={[
+          { key: 'column', label: 'Column' },
+          { key: 'data_type', label: 'Data type' },
+          { key: 'missing_count', label: 'Missing values' },
+          {
+            key: 'missing_percentage',
+            label: 'Missing %',
+            render: (v) => `${v ?? 0}%`,
+          },
+          { key: 'unique_count', label: 'Unique values' },
+          {
+            key: 'constant_column',
+            label: 'Constant column',
+            render: (v) => v ? 'Yes' : 'No',
+          },
+        ]}
+        rows={columnQualityRows}
+        emptyText="No enhanced column profile is saved. Upload the CSV again to generate it."
+      />
+
+      <h3 className="spaced-heading">Whitespace issues</h3>
+      <DataTable
+        columns={[
+          { key: 'column', label: 'Column' },
+          { key: 'count', label: 'Values with extra whitespace' },
+        ]}
+        rows={whitespaceIssues}
+        emptyText="No leading or trailing whitespace detected."
+      />
+
+      <h3 className="spaced-heading">Duplicate column names</h3>
+      {duplicateColumnNames.length ? (
+        <ul>
+          {duplicateColumnNames.map((name, index) => (
+            <li key={`${name}-${index}`}>{name}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>No duplicate column names detected.</p>
+      )}
+    </>
+  )}
+</section>}
+
 
       {page === 'anomalies' && <section className="panel"><div className="panel-title"><div><h2>Anomaly Detection</h2><p>Uses your backend IQR detector and stored anomaly findings.</p></div><AlertTriangle size={22} /></div>
-        <form className="detect-form" onSubmit={detectAnomalies}><label className="file-inline"><span>CSV file for the active dataset</span><input type="file" accept=".csv,text/csv" onChange={(e) => setDatasetFile(e.target.files?.[0] ?? null)} /></label><button className="primary-button" type="submit" disabled={busy || !selectedId}>Run IQR detection</button><button className="secondary-button" type="button" onClick={loadAnomalies} disabled={busy || !selectedId}>Load saved findings</button></form>
+        
+<form className="detect-form" onSubmit={detectAnomalies}>
+  <label className="file-inline">
+    <span>CSV file for the active dataset</span>
+    <input
+      type="file"
+      accept=".csv,text/csv"
+      onChange={(e) => setDatasetFile(e.target.files?.[0] ?? null)}
+    />
+  </label>
+
+  <label className="file-inline">
+    <span>Anomaly detection method</span>
+    <select
+      value={anomalyMethod}
+      onChange={(e) => setAnomalyMethod(e.target.value)}
+      disabled={busy}
+    >
+      <option value="IQR">Standard IQR</option>
+      <option value="LOG_IQR">Log-IQR (for skewed non-negative data)</option>
+    </select>
+  </label>
+
+  <button
+    className="primary-button"
+    type="submit"
+    disabled={busy || !selectedId}
+  >
+    {busy ? 'Detecting…' : `Run ${anomalyMethod === 'IQR' ? 'IQR' : 'Log-IQR'} detection`}
+  </button>
+
+  <button
+    className="secondary-button"
+    type="button"
+    onClick={loadAnomalies}
+    disabled={busy || !selectedId}
+  >
+    Load saved findings
+  </button>
+</form>
         <div className="section-summary"><strong>{anomalies.length}</strong><span>stored anomaly findings</span></div>
         <DataTable columns={[{ key: 'column_name', label: 'Column' }, { key: 'row_index', label: 'Row index' }, { key: 'observed_value', label: 'Observed value' }, { key: 'lower_bound', label: 'Lower bound' }, { key: 'upper_bound', label: 'Upper bound' }, { key: 'direction', label: 'Direction' }, { key: 'severity', label: 'Severity', render: (v) => <span className={`severity ${String(v ?? '').toLowerCase()}`}>{v ?? '—'}</span> }]} rows={anomalies} emptyText="No saved anomalies. Select the matching CSV and run IQR detection." />
       </section>}

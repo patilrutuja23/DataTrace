@@ -53,6 +53,71 @@ def analyze_root_cause(
                 "transactions or unintended duplicate ingestion."
             ),
         })
+    
+    # Rule 2b: Leading or trailing whitespace
+    whitespace_issues = quality.get("whitespace_issues") or {}
+
+    if whitespace_issues:
+        findings.append({
+            "cause": "Leading or trailing whitespace detected",
+            "category": "DATA_QUALITY",
+            "confidence": 0.95,
+            "evidence": {
+                "columns_with_whitespace": whitespace_issues,
+                "affected_value_count": sum(
+                    count for count in whitespace_issues.values()
+                    if isinstance(count, (int, float))
+                ),
+            },
+            "recommendation": (
+                "Inspect affected text columns and trim whitespace "
+                "where appropriate. Check whether whitespace changes "
+                "identifiers, category matching, or joins."
+            ),
+        })
+
+    # Rule 2c: Duplicate column names
+    duplicate_column_names = quality.get("duplicate_column_names") or []
+
+    if duplicate_column_names:
+        findings.append({
+            "cause": "Duplicate column names detected",
+            "category": "DATA_QUALITY",
+            "confidence": 0.99,
+            "evidence": {
+                "duplicate_column_names": duplicate_column_names,
+            },
+            "recommendation": (
+                "Rename duplicate columns uniquely and verify that "
+                "each column maps to the intended source field."
+            ),
+        })
+
+    # Rule 2d: Constant columns
+    column_profiles = quality.get("column_profiles") or []
+
+    constant_columns = [
+        item.get("column")
+        for item in column_profiles
+        if item.get("constant_column") is True
+        and item.get("column") is not None
+    ]
+
+    if constant_columns:
+        findings.append({
+            "cause": "Constant columns detected",
+            "category": "DATA_QUALITY",
+            "confidence": 0.75,
+            "evidence": {
+                "constant_columns": constant_columns,
+            },
+            "recommendation": (
+                "Check whether these columns are expected to contain "
+                "only one distinct value. If not, investigate source "
+                "mapping, ingestion, and transformation logic."
+            ),
+        })
+
 
     # Rule 3: Numeric anomalies
     if anomalies:

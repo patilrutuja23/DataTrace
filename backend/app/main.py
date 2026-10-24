@@ -327,10 +327,12 @@ def get_neo4j_lineage_endpoint(
         ) from exc
 
 
+
 @app.post("/api/datasets/{dataset_id}/anomalies")
 async def analyze_anomalies(
     dataset_id: int,
     file: UploadFile | None = File(default=None),
+    method: str = "IQR",
     db: Session = Depends(get_db),
 ):
     dataset = db.get(DatasetRecord, dataset_id)
@@ -341,9 +343,15 @@ async def analyze_anomalies(
             detail="Dataset analysis not found.",
         )
 
+    method = method.upper()
+    if method not in {"IQR", "LOG_IQR"}:
+        raise HTTPException(
+            status_code=400,
+            detail="method must be IQR or LOG_IQR.",
+        )
+
     try:
         if file is not None:
-            # Preserve support for manually uploaded CSV files.
             if not file.filename or not file.filename.lower().endswith(".csv"):
                 raise HTTPException(
                     status_code=400,
@@ -351,7 +359,6 @@ async def analyze_anomalies(
                 )
             file_bytes = await file.read()
         else:
-            # Airflow can analyze the original file by dataset ID.
             stored_path = UPLOAD_DIR / f"dataset_{dataset_id}.csv"
 
             if not stored_path.is_file():
@@ -367,7 +374,7 @@ async def analyze_anomalies(
             file_bytes = stored_path.read_bytes()
 
         df = read_csv_file(file_bytes)
-        anomalies = detect_anomalies(df)
+        anomalies = detect_anomalies(df, method=method)
 
         db.execute(
             delete(AnomalyRecord).where(
@@ -389,7 +396,7 @@ async def analyze_anomalies(
         return {
             "dataset_id": dataset_id,
             "filename": dataset.filename,
-            "method": "IQR",
+            "method": method,
             "anomaly_count": len(anomalies),
             "anomalies": anomalies,
         }
@@ -673,3 +680,40 @@ def save_pipeline_execution(
         "finished_at": record.finished_at,
         "error_summary": record.error_summary,
     }
+
+
+
+@app.get("/api/datasets/{dataset_id}/pipeline-executions")
+def get_pipeline_executions(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    records = (
+        db.query(PipelineExecutionRecord)
+        .filter(PipelineExecutionRecord.dataset_id == dataset_id)
+        .order_by(PipelineExecutionRecord.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": record.id,
+            "dataset_id": record.dataset_id,
+            "dag_id": record.dag_id,
+            "dag_run_id": record.dag_run_id,
+            "state": record.state,
+            "task_states": record.task_states,
+            "started_at": record.started_at,
+            "finished_at": record.finished_at,
+            "error_summary": record.error_summary,
+        }
+        for record in records
+    ]

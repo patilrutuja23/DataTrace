@@ -223,20 +223,22 @@ def mark_pipeline_task_success(context):
     ti = context["ti"]
     ti.xcom_push(key="pipeline_task_status", value="success")
 
+
+
 def save_pipeline_execution(**context):
     """Save pipeline execution evidence to the DataTrace backend."""
-
     import json
     import urllib.error
     import urllib.request
     from datetime import datetime, timezone
 
     dag_run = context["dag_run"]
+
     dataset_id = (dag_run.conf or {}).get("dataset_id")
-
     if dataset_id is None:
-        raise ValueError("Missing dataset_id in DAG run configuration.")
-
+        raise ValueError(
+            "Cannot save execution evidence: dataset_id is missing."
+        )
     dataset_id = int(dataset_id)
 
     monitored_tasks = [
@@ -259,19 +261,30 @@ def save_pipeline_execution(**context):
         )
         task_states[task_id] = marker or "unknown"
 
-    failed_or_unknown = [
-        task_id
+    failed_tasks = [
+        f"{task_id}: {state}"
+        for task_id, state in task_states.items()
+        if state in {"failed", "upstream_failed"}
+    ]
+
+    unfinished_tasks = [
+        f"{task_id}: {state}"
         for task_id, state in task_states.items()
         if state != "success"
     ]
 
-    run_state = "failed" if failed_or_unknown else "success"
-
-    error_summary = (
-        "Missing success marker for: " + ", ".join(failed_or_unknown)
-        if failed_or_unknown
-        else None
-    )
+    if failed_tasks:
+        run_state = "failed"
+        error_summary = "; ".join(failed_tasks)
+    elif unfinished_tasks:
+        run_state = "failed"
+        error_summary = (
+            "Missing successful task markers: "
+            + "; ".join(unfinished_tasks)
+        )
+    else:
+        run_state = "success"
+        error_summary = None
 
     started_at = (
         dag_run.start_date.isoformat()
@@ -291,8 +304,8 @@ def save_pipeline_execution(**context):
     }
 
     url = (
-        f"{BASE_URL}/api/datasets/{dataset_id}"
-        "/pipeline-executions"
+        f"{BASE_URL}/api/datasets/"
+        f"{dataset_id}/pipeline-executions"
     )
 
     request = urllib.request.Request(
@@ -304,19 +317,21 @@ def save_pipeline_execution(**context):
 
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            body = response.read().decode("utf-8")
-            print(f"Execution evidence saved: HTTP {response.status}")
-            print(json.dumps(json.loads(body), indent=2))
+            result = json.loads(response.read().decode("utf-8"))
+            print("Pipeline execution evidence saved:")
+            print(json.dumps(result, indent=2))
+
     except urllib.error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(
-            f"Execution evidence API returned HTTP {exc.code}: {details}"
+            f"Execution evidence API returned HTTP "
+            f"{exc.code}: {details}"
         ) from exc
+
     except urllib.error.URLError as exc:
         raise RuntimeError(
             f"Could not submit execution evidence: {exc}"
         ) from exc
-
 
 # def save_pipeline_execution(**context):
 #     """Save actual Airflow task states and run details to DataTrace."""
