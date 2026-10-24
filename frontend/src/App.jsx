@@ -6,6 +6,7 @@ import {
   LoaderCircle, RefreshCw, Search, ShieldCheck, Upload, Workflow,
 } from 'lucide-react'
 import './App.css'
+import DatabaseConnections from './DatabaseConnections'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 const api = axios.create({ baseURL: API_URL, timeout: 30000 })
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { id: 'anomalies', label: 'Anomaly Detection', icon: AlertTriangle },
   { id: 'lineage', label: 'Data Lineage', icon: GitBranch },
   { id: 'investigation', label: 'Root Cause & Impact', icon: Activity },
+  { id: 'connections', label: 'Database Connections', icon: Database },
 ]
 
 function errorText(error) {
@@ -420,6 +422,8 @@ async function detectAnomalies(event) {
           {impact?.error ? <div className="alert error-alert">{impact.error} Make sure Neo4j is running and lineage has been synced.</div> : <><div className="section-summary"><strong>{impact?.impacted_asset_count ?? impactedAssets.length}</strong><span>impacted assets</span></div><DataTable columns={[{ key: 'name', label: 'Asset' }, { key: 'type', label: 'Type' }, { key: 'path_relationships', label: 'Path', render: (v) => Array.isArray(v) ? v.join(' → ') : '—' }]} rows={impactedAssets} emptyText="No downstream impact returned. Create lineage and sync it to Neo4j first." /></>}
         </section>
       </>}
+      
+      {page === 'connections' && <DatabaseConnections />}
       <footer>DataTrace AI · Data quality, anomaly detection, lineage, and investigation</footer>
     </main>
   </div>

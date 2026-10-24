@@ -1,5 +1,5 @@
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import urllib.error
 import urllib.request
@@ -223,22 +223,40 @@ def mark_pipeline_task_success(context):
     ti = context["ti"]
     ti.xcom_push(key="pipeline_task_status", value="success")
 
+def mark_pipeline_task_failure(context):
+    """Record failure details without querying Airflow's ORM."""
+    ti = context["ti"]
+    exception = context.get("exception")
+
+    failure_details = {
+        "task_id": ti.task_id,
+        "state": "failed",
+        "error": str(exception) if exception else "Task failed",
+    }
+
+    ti.xcom_push(
+        key="pipeline_task_failure",
+        value=failure_details,
+    )
+
+
 
 
 def save_pipeline_execution(**context):
-    """Save pipeline execution evidence to the DataTrace backend."""
+    """Save pipeline execution evidence without accessing Airflow's ORM."""
     import json
     import urllib.error
     import urllib.request
     from datetime import datetime, timezone
 
     dag_run = context["dag_run"]
-
     dataset_id = (dag_run.conf or {}).get("dataset_id")
+
     if dataset_id is None:
         raise ValueError(
             "Cannot save execution evidence: dataset_id is missing."
         )
+
     dataset_id = int(dataset_id)
 
     monitored_tasks = [
@@ -253,35 +271,55 @@ def save_pipeline_execution(**context):
     ]
 
     task_states = {}
+    failure_details = []
 
     for task_id in monitored_tasks:
         marker = context["ti"].xcom_pull(
             task_ids=task_id,
             key="pipeline_task_status",
         )
-        task_states[task_id] = marker or "unknown"
+
+        failure = context["ti"].xcom_pull(
+            task_ids=task_id,
+            key="pipeline_task_failure",
+        )
+
+        if failure:
+            task_states[task_id] = "failed"
+            failure_details.append(
+                f"{task_id}: {failure.get('error', 'Task failed')}"
+            )
+        elif marker == "success":
+            task_states[task_id] = "success"
+        else:
+            # This task may have failed, been skipped, or never run.
+            # Do not claim a precise state without evidence.
+            task_states[task_id] = "unknown"
 
     failed_tasks = [
-        f"{task_id}: {state}"
+        task_id
         for task_id, state in task_states.items()
-        if state in {"failed", "upstream_failed"}
+        if state == "failed"
     ]
 
-    unfinished_tasks = [
-        f"{task_id}: {state}"
+    missing_markers = [
+        task_id
         for task_id, state in task_states.items()
-        if state != "success"
+        if state == "unknown"
     ]
 
-    if failed_tasks:
+    if failed_tasks or missing_markers:
         run_state = "failed"
-        error_summary = "; ".join(failed_tasks)
-    elif unfinished_tasks:
-        run_state = "failed"
-        error_summary = (
-            "Missing successful task markers: "
-            + "; ".join(unfinished_tasks)
-        )
+
+        summaries = failure_details[:]
+
+        if missing_markers:
+            summaries.append(
+                "Unable to confirm task state for: "
+                + ", ".join(missing_markers)
+            )
+
+        error_summary = "; ".join(summaries)
     else:
         run_state = "success"
         error_summary = None
@@ -324,8 +362,7 @@ def save_pipeline_execution(**context):
     except urllib.error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(
-            f"Execution evidence API returned HTTP "
-            f"{exc.code}: {details}"
+            f"Execution evidence API returned HTTP {exc.code}: {details}"
         ) from exc
 
     except urllib.error.URLError as exc:
@@ -452,6 +489,10 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
+    default_args={
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+    },
     tags=["datatrace", "lineage", "neo4j"],
 ) as dag:
 
@@ -459,47 +500,55 @@ with DAG(
         task_id="check_backend",
         python_callable=check_backend,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     lineage = PythonOperator(
         task_id="create_lineage",
         python_callable=create_lineage,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     neo4j_sync = PythonOperator(
         task_id="sync_lineage_to_neo4j",
         python_callable=sync_lineage,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     verify = PythonOperator(
         task_id="verify_lineage",
         python_callable=verify_lineage,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
     anomaly_detection = PythonOperator(
         task_id="detect_anomalies",
         python_callable=detect_anomalies,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     anomaly_verification = PythonOperator(
         task_id="verify_anomalies",
         python_callable=verify_anomalies,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
     
     investigation = PythonOperator(
         task_id="investigate_dataset",
         python_callable=investigate_dataset,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     rca_impact_verification = PythonOperator(
         task_id="verify_rca_impact",
         python_callable=verify_rca_impact,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
 
     execution_evidence = PythonOperator(
@@ -507,6 +556,7 @@ with DAG(
         python_callable=save_pipeline_execution,
         trigger_rule=TriggerRule.ALL_DONE,
         on_success_callback=mark_pipeline_task_success,
+        on_failure_callback=mark_pipeline_task_failure,
     )
     
     backend_check >> lineage >> neo4j_sync >> verify

@@ -1,0 +1,39 @@
+{"timestamp":"2026-10-24T10:13:11.764354Z","level":"info","event":"::group::Pre Execute","logger":"task","filename":"task_runner.py","lineno":2412}
+{"timestamp":"2026-10-24T10:13:11.813382Z","level":"info","event":"DAG bundles loaded: dags-folder, example_dags, apache-airflow-providers-common-sql-example-dags, apache-airflow-providers-standard-example-dags","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":304}
+{"timestamp":"2026-10-24T10:13:11.818409Z","level":"info","event":"Filling up the DagBag from /opt/airflow/dags/datatrace_pipeline.py","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.dag_processing.dagbag.BundleDagBag","filename":"dagbag.py","lineno":460}
+{"timestamp":"2026-10-24T10:13:11.853424Z","level":"warning","event":"The `airflow.operators.python.PythonOperator` attribute is deprecated. Please use `'airflow.providers.standard.operators.python.PythonOperator'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":10,"task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-24T10:13:11.853805Z","level":"warning","event":"The `airflow.utils.trigger_rule.TriggerRule` attribute is deprecated. Please use `'airflow.task.trigger_rule.TriggerRule'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":11,"task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-24T10:13:11.858071Z","level":"info","event":"Worker startup parse complete","bundle_name":"dags-folder","bundle_version":null,"dag_file":"datatrace_pipeline.py","dag_id":"datatrace_pipeline","bundle_prepare_ms":7,"dag_file_parse_ms":39,"task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1073}
+{"timestamp":"2026-10-24T10:13:11.896844Z","level":"info","event":"Task instance is in running state","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:11.897744Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.QUEUED","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:11.898797Z","level":"info","event":"Current task name:save_pipeline_execution","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:11.899702Z","level":"info","event":"Dag name:datatrace_pipeline","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:11.898630Z","level":"info","event":"::endgroup::","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2232}
+{"timestamp":"2026-10-24T10:13:12.140067Z","level":"info","event":"Pipeline execution evidence saved:","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.140879Z","level":"info","event":"{","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.141420Z","level":"info","event":"  \"message\": \"Pipeline execution evidence saved.\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.141803Z","level":"info","event":"  \"id\": 9,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.142212Z","level":"info","event":"  \"dataset_id\": 93,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.142544Z","level":"info","event":"  \"dag_id\": \"datatrace_pipeline\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.143005Z","level":"info","event":"  \"dag_run_id\": \"manual__2026-10-24T10:12:58.988328+00:00\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.143428Z","level":"info","event":"  \"state\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.143873Z","level":"info","event":"  \"task_states\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.144347Z","level":"info","event":"    \"check_backend\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.144820Z","level":"info","event":"    \"create_lineage\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.145299Z","level":"info","event":"    \"sync_lineage_to_neo4j\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.145681Z","level":"info","event":"    \"verify_lineage\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.146008Z","level":"info","event":"    \"detect_anomalies\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.146422Z","level":"info","event":"    \"verify_anomalies\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.146782Z","level":"info","event":"    \"investigate_dataset\": \"success\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.147316Z","level":"info","event":"    \"verify_rca_impact\": \"success\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.147665Z","level":"info","event":"  },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.148050Z","level":"info","event":"  \"started_at\": \"2026-10-24T10:13:00.043459+00:00\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.148538Z","level":"info","event":"  \"finished_at\": \"2026-10-24T10:13:12.022291+00:00\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.149087Z","level":"info","event":"  \"error_summary\": null","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.149440Z","level":"info","event":"}","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.140069Z","level":"info","event":"Done. Returned value was: None","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":233}
+{"timestamp":"2026-10-24T10:13:12.140344Z","level":"info","event":"::group::Post Execute","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1580}
+{"timestamp":"2026-10-24T10:13:12.209714Z","level":"info","event":"Task instance in success state","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.210741Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.RUNNING","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.211858Z","level":"info","event":"Task operator:<Task(PythonOperator): save_pipeline_execution>","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:13:12.211428Z","level":"info","event":"::endgroup::","task_id":"save_pipeline_execution","run_id":"manual__2026-10-24T10:12:58.988328+00:00","map_index":-1,"ti_id":"01a16d66-3c2a-7729-83af-dd231c9d7815","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2379}

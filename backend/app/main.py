@@ -35,6 +35,7 @@ from app.rca.rca_engine import analyze_root_cause
 from app.graph.impact_service import get_downstream_impact
 from app.database import models
 from app.database.models import AnomalyRecord, PipelineExecutionRecord
+from app.database.source_service import router as source_router
 
 
 
@@ -43,6 +44,7 @@ app = FastAPI(
     description="Data profiling, data quality analysis and storage",
     version="2.0.0",
 )
+app.include_router(source_router)
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 

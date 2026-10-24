@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 from sqlalchemy import JSON
 from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean
 
 
 
@@ -135,6 +136,53 @@ class PipelineExecutionRecord(Base):
     finished_at = Column(String(50), nullable=True)
 
     error_summary = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class DatabaseSource(Base):
+    __tablename__ = "database_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String(255), nullable=False)
+    db_type = Column(String(20), nullable=False)
+
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False)
+    database_name = Column(String(255), nullable=False)
+    username = Column(String(255), nullable=False)
+
+    # Add inside DatabaseSource, not DatasetRecord.
+
+    primary_key_column = Column(String(255), nullable=True)
+    updated_at_column = Column(String(255), nullable=True)
+
+    last_checkpoint = Column(String(255), nullable=True)
+    dataset_id = Column(
+        Integer,
+        ForeignKey("datasets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    ingestion_status = Column(
+        String(30),
+        nullable=False,
+        default="not_started",
+    )
+    # Store an encrypted password, never plaintext.
+    encrypted_password = Column(Text, nullable=False)
+
+    selected_schema = Column(String(255), nullable=True)
+    selected_table = Column(String(255), nullable=True)
+
+    is_active = Column(Boolean, nullable=False, default=True)
 
     created_at = Column(
         DateTime(timezone=True),

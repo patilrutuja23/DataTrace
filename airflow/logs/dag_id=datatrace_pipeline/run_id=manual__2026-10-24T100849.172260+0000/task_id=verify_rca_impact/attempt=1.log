@@ -1,0 +1,88 @@
+{"timestamp":"2026-10-24T10:09:14.518598Z","level":"info","event":"::group::Pre Execute","logger":"task","filename":"task_runner.py","lineno":2412}
+{"timestamp":"2026-10-24T10:09:14.595545Z","level":"info","event":"DAG bundles loaded: dags-folder, example_dags, apache-airflow-providers-common-sql-example-dags, apache-airflow-providers-standard-example-dags","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":304}
+{"timestamp":"2026-10-24T10:09:14.600684Z","level":"info","event":"Filling up the DagBag from /opt/airflow/dags/datatrace_pipeline.py","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.dag_processing.dagbag.BundleDagBag","filename":"dagbag.py","lineno":460}
+{"timestamp":"2026-10-24T10:09:14.648692Z","level":"warning","event":"The `airflow.operators.python.PythonOperator` attribute is deprecated. Please use `'airflow.providers.standard.operators.python.PythonOperator'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":10,"task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-24T10:09:14.650184Z","level":"warning","event":"The `airflow.utils.trigger_rule.TriggerRule` attribute is deprecated. Please use `'airflow.task.trigger_rule.TriggerRule'`.","category":"UserWarning","filename":"/opt/airflow/dags/datatrace_pipeline.py","lineno":11,"task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"py.warnings"}
+{"timestamp":"2026-10-24T10:09:14.653965Z","level":"info","event":"Worker startup parse complete","bundle_name":"dags-folder","bundle_version":null,"dag_file":"datatrace_pipeline.py","dag_id":"datatrace_pipeline","bundle_prepare_ms":11,"dag_file_parse_ms":53,"task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1073}
+{"timestamp":"2026-10-24T10:09:14.734778Z","level":"info","event":"Task instance is in running state","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:14.735779Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.QUEUED","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:14.737307Z","level":"info","event":"Current task name:verify_rca_impact","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:14.738378Z","level":"info","event":"Dag name:datatrace_pipeline","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:14.737524Z","level":"info","event":"::endgroup::","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2232}
+{"timestamp":"2026-10-24T10:09:14.958413Z","level":"info","event":"GET http://host.docker.internal:8000/api/datasets/93/rca -> HTTP 200","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.026836Z","level":"info","event":"GET http://host.docker.internal:8000/api/datasets/93/impact -> HTTP 200","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.028735Z","level":"info","event":"Root cause analysis:","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.030597Z","level":"info","event":"{","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.031765Z","level":"info","event":"  \"dataset_id\": 93,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.033054Z","level":"info","event":"  \"dataset\": \"duplicate_test.csv\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.034760Z","level":"info","event":"  \"finding_count\": 3,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.035841Z","level":"info","event":"  \"findings\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.037174Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.038589Z","level":"info","event":"      \"cause\": \"Missing data detected\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.040263Z","level":"info","event":"      \"category\": \"DATA_QUALITY\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.041422Z","level":"info","event":"      \"confidence\": 0.9,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.042477Z","level":"info","event":"      \"evidence\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.044177Z","level":"info","event":"        \"columns_with_missing_values\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.060202Z","level":"info","event":"          \"name\": 1","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.065053Z","level":"info","event":"        },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.069221Z","level":"info","event":"        \"missing_cells\": 1","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.071091Z","level":"info","event":"      },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.074692Z","level":"info","event":"      \"recommendation\": \"Inspect missing records and determine whether they result from ingestion, source data, or an intentional business rule.\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.077108Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.083300Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.088373Z","level":"info","event":"      \"cause\": \"Duplicate rows detected\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.091245Z","level":"info","event":"      \"category\": \"DATA_QUALITY\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.092242Z","level":"info","event":"      \"confidence\": 0.9,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.093364Z","level":"info","event":"      \"evidence\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.094423Z","level":"info","event":"        \"duplicate_rows\": 1","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.095231Z","level":"info","event":"      },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.101502Z","level":"info","event":"      \"recommendation\": \"Check whether duplicate records are valid transactions or unintended duplicate ingestion.\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.104212Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.105453Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.107221Z","level":"info","event":"      \"cause\": \"Constant columns detected\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.109954Z","level":"info","event":"      \"category\": \"DATA_QUALITY\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.114866Z","level":"info","event":"      \"confidence\": 0.75,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.117825Z","level":"info","event":"      \"evidence\": {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.121626Z","level":"info","event":"        \"constant_columns\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.122678Z","level":"info","event":"          \"constant_field\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.123886Z","level":"info","event":"        ]","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.124838Z","level":"info","event":"      },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.125777Z","level":"info","event":"      \"recommendation\": \"Check whether these columns are expected to contain only one distinct value. If not, investigate source mapping, ingestion, and transformation logic.\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.127644Z","level":"info","event":"    }","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.129087Z","level":"info","event":"  ],","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.129983Z","level":"info","event":"  \"limitations\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.131085Z","level":"info","event":"    \"Findings are rule-based hypotheses, not proof of causation.\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.132076Z","level":"info","event":"    \"Pipeline logs and execution status are not currently available to this engine.\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.137912Z","level":"info","event":"  ]","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.138847Z","level":"info","event":"}","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.139795Z","level":"info","event":"Impact analysis:","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.140753Z","level":"info","event":"{","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.141661Z","level":"info","event":"  \"dataset_id\": 93,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.143439Z","level":"info","event":"  \"impacted_asset_count\": 2,","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.144569Z","level":"info","event":"  \"impacted_assets\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.146412Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.147357Z","level":"info","event":"      \"node_key\": \"dataset:93:pipeline\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.148233Z","level":"info","event":"      \"name\": \"DataTrace Analysis\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.152061Z","level":"info","event":"      \"type\": \"PIPELINE\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.154639Z","level":"info","event":"      \"path_relationships\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.156037Z","level":"info","event":"        \"PROCESSED_BY\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.157146Z","level":"info","event":"      ]","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.160276Z","level":"info","event":"    },","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.161317Z","level":"info","event":"    {","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.162388Z","level":"info","event":"      \"node_key\": \"dataset:93:output\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.163624Z","level":"info","event":"      \"name\": \"Dataset Analysis #93\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.164756Z","level":"info","event":"      \"type\": \"OUTPUT\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.165746Z","level":"info","event":"      \"path_relationships\": [","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.166788Z","level":"info","event":"        \"PROCESSED_BY\",","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.167716Z","level":"info","event":"        \"PRODUCES\"","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.172317Z","level":"info","event":"      ]","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.174088Z","level":"info","event":"    }","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.175703Z","level":"info","event":"  ]","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.177991Z","level":"info","event":"}","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.179211Z","level":"info","event":"RCA verified: 3 findings; impact verified: 2 assets.","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.026825Z","level":"info","event":"Done. Returned value was: None","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":233}
+{"timestamp":"2026-10-24T10:09:15.027173Z","level":"info","event":"::group::Post Execute","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":1580}
+{"timestamp":"2026-10-24T10:09:15.375296Z","level":"info","event":"Task instance in success state","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.380653Z","level":"info","event":" Previous state of the Task instance: TaskInstanceState.RUNNING","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.381499Z","level":"info","event":"Task operator:<Task(PythonOperator): verify_rca_impact>","logger":"task.stdout"}
+{"timestamp":"2026-10-24T10:09:15.377615Z","level":"info","event":"::endgroup::","task_id":"verify_rca_impact","run_id":"manual__2026-10-24T10:08:49.172260+00:00","map_index":-1,"ti_id":"01a16d62-6c4e-7f73-bcb6-9c9021fe615e","dag_id":"datatrace_pipeline","try_number":1,"logger":"task","filename":"task_runner.py","lineno":2379}
