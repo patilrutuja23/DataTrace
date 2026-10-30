@@ -8,12 +8,21 @@ import io
 from pydantic import BaseModel, Field
 from pathlib import Path
 
+import asyncio
+
+from fastapi import HTTPException
+from app.database.models import DatabaseSource
+from app.database.source_service import ingest_source
 
 from app.ingestion.csv_reader import read_csv_file
 from app.profiling.profiler import generate_profile
 from app.quality.quality_engine import calculate_quality
 from app.database.connection import SessionLocal, engine, Base
-from app.database.models import DatasetRecord, AnomalyRecord
+from app.database.models import (
+    DatasetRecord,
+    AnomalyRecord,
+    DatabaseSource,
+)
 from app.anomaly.anomaly_engine import detect_anomalies
 from app.database import models
 from app.database.models import LineageNode, LineageEdge
@@ -35,7 +44,7 @@ from app.rca.rca_engine import analyze_root_cause
 from app.graph.impact_service import get_downstream_impact
 from app.database import models
 from app.database.models import AnomalyRecord, PipelineExecutionRecord
-from app.database.source_service import router as source_router
+from app.database.source_service import router as  source_router, ingest_source
 
 
 
@@ -45,6 +54,58 @@ app = FastAPI(
     version="2.0.0",
 )
 app.include_router(source_router)
+AUTO_SYNC_INTERVAL_SECONDS = 10
+
+
+def sync_source_once(source_id: int):
+    """
+    Run one database ingestion using its own SQLAlchemy session.
+    """
+    db = SessionLocal()
+
+    try:
+        result = ingest_source(source_id, db)
+        print(
+            f"[AUTO SYNC] Source {source_id}: "
+            f"dataset {result['dataset_id']}, "
+            f"rows {result['row_count']}"
+        )
+
+    except Exception as exc:
+        print(f"[AUTO SYNC ERROR] Source {source_id}: {exc}")
+
+    finally:
+        db.close()
+
+
+async def auto_sync_loop():
+    """
+    Automatically refresh all active database sources
+    that have a selected table.
+    """
+    while True:
+        db = SessionLocal()
+
+        try:
+            source_ids = db.scalars(
+                select(DatabaseSource.id).where(
+                    DatabaseSource.is_active == True,
+                    DatabaseSource.selected_table.is_not(None),
+                    DatabaseSource.selected_schema.is_not(None),
+                )
+            ).all()
+
+        except Exception as exc:
+            print(f"[AUTO SYNC] Could not retrieve sources: {exc}")
+            source_ids = []
+
+        finally:
+            db.close()
+
+        for source_id in source_ids:
+            await asyncio.to_thread(sync_source_once, source_id)
+
+        await asyncio.sleep(AUTO_SYNC_INTERVAL_SECONDS)
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -57,20 +118,37 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-def startup():
+async def startup():
     Base.metadata.create_all(bind=engine)
 
+    app.state.auto_sync_task = asyncio.create_task(
+        auto_sync_loop()
+    )
+
+    print("[AUTO SYNC] Background database monitoring started.")
 def get_db():
     db = SessionLocal()
     try: 
         yield db
     finally:
         db.close()
+     
+     
         
-
 @app.on_event("shutdown")
-def shutdown():
+async def shutdown():
+    task = getattr(app.state, "auto_sync_task", None)
+
+    if task:
+        task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
     close_neo4j_connection()
+    print("[AUTO SYNC] Background database monitoring stopped.")
     
     
 
@@ -160,6 +238,7 @@ async def analyze_dataset(file: UploadFile = File(...), db: Session = Depends(ge
         "created_at": record.created_at,
     }   
 
+
 @app.get("/api/datasets")
 def list_datasets(db: Session = Depends(get_db)):
     try:
@@ -170,6 +249,12 @@ def list_datasets(db: Session = Depends(get_db)):
         result = []
 
         for record in records:
+            source = db.scalars(
+                select(DatabaseSource).where(
+                    DatabaseSource.dataset_id == record.id
+                )
+            ).first()
+
             result.append({
                 "id": record.id,
                 "filename": record.filename,
@@ -178,6 +263,13 @@ def list_datasets(db: Session = Depends(get_db)):
                 "quality_score": record.quality_score,
                 "quality_status": record.quality_status,
                 "created_at": record.created_at,
+                "source_type": "database" if source else "csv",
+                "source_id": source.id if source else None,
+                "source_name": source.name if source else None,
+                "selected_schema": source.selected_schema if source else None,
+                "selected_table": source.selected_table if source else None,
+                "last_sync_at": source.last_sync_at if source else None,
+                "ingestion_status": source.ingestion_status if source else None,
             })
 
         return result
@@ -188,7 +280,6 @@ def list_datasets(db: Session = Depends(get_db)):
             status_code=500,
             detail="Could not retrieve datasets."
         ) from exc
-
     
 
 
@@ -205,12 +296,25 @@ def get_dataset(
             detail="Dataset analysis not found.",
         )
 
+    source = db.scalars(
+        select(DatabaseSource).where(
+            DatabaseSource.dataset_id == record.id
+        )
+    ).first()
+
     return {
         "id": record.id,
         "dataset": record.filename,
         "profile": record.profile,
         "quality": record.quality,
         "created_at": record.created_at,
+        "source_type": "database" if source else "csv",
+        "source_id": source.id if source else None,
+        "source_name": source.name if source else None,
+        "selected_schema": source.selected_schema if source else None,
+        "selected_table": source.selected_table if source else None,
+        "last_sync_at": source.last_sync_at if source else None,
+        "ingestion_status": source.ingestion_status if source else None,
     }
 
 

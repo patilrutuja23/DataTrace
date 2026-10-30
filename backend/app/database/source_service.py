@@ -308,8 +308,176 @@ def select_source_table(
         engine.dispose()
 
 
+
+
 @router.post("/{source_id}/ingest")
-def ingest_source(source_id: int):
-    # Incremental ingestion logic will go here.
-    pass
+def ingest_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    source = db.get(DatabaseSource, source_id)
+
+    if source is None or not source.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail="Database source not found.",
+        )
+
+    if not source.selected_table or not source.selected_schema:
+        raise HTTPException(
+            status_code=400,
+            detail="Select a database table before ingesting.",
+        )
+
+    engine = source_engine(source)
+
+    try:
+        schema = source.selected_schema
+        table = source.selected_table
+
+        inspector = inspect(engine)
+
+        if schema not in inspector.get_schema_names():
+            raise HTTPException(
+                status_code=400,
+                detail="Selected schema does not exist.",
+            )
+
+        if table not in inspector.get_table_names(schema=schema):
+            raise HTTPException(
+                status_code=400,
+                detail="Selected table does not exist.",
+            )
+
+        preparer = engine.dialect.identifier_preparer
+
+        qualified_table = (
+            f"{preparer.quote_schema(schema)}."
+            f"{preparer.quote(table)}"
+        )
+
+        # Read the latest complete table snapshot.
+        with engine.connect() as connection:
+            df = pd.read_sql_query(
+                text(f"SELECT * FROM {qualified_table}"),
+                connection,
+            )
+
+        if df.empty:
+            raise HTTPException(
+                status_code=400,
+                detail="The selected table contains no records.",
+            )
+
+        # Recalculate the complete dataset profile and quality.
+        profile = generate_profile(df)
+        quality = calculate_quality(df)
+        anomalies = detect_anomalies(df)
+
+        # Reuse the existing database-backed dataset.
+        record = None
+
+        if source.dataset_id is not None:
+            record = db.get(DatasetRecord, source.dataset_id)
+
+        is_new_dataset = record is None
+
+        if is_new_dataset:
+            record = DatasetRecord(
+                filename=f"{source.name}.{schema}.{table}",
+                row_count=len(df),
+                column_count=len(df.columns),
+                profile=profile,
+                quality=quality,
+                quality_score=quality["quality_score"],
+                quality_status=quality["status"],
+            )
+            db.add(record)
+            db.flush()
+
+        else:
+            record.filename = f"{source.name}.{schema}.{table}"
+            record.row_count = len(df)
+            record.column_count = len(df.columns)
+            record.profile = profile
+            record.quality = quality
+            record.quality_score = quality["quality_score"]
+            record.quality_status = quality["status"]
+
+        # Replace previous anomaly results for this dataset.
+        db.execute(
+            delete(AnomalyRecord).where(
+                AnomalyRecord.dataset_id == record.id
+            )
+        )
+
+        for anomaly in anomalies:
+            db.add(
+                AnomalyRecord(
+                    dataset_id=record.id,
+                    column_name=anomaly["column_name"],
+                    row_index=anomaly["row_index"],
+                    observed_value=anomaly["observed_value"],
+                    lower_bound=anomaly["lower_bound"],
+                    upper_bound=anomaly["upper_bound"],
+                    direction=anomaly["direction"],
+                    severity=anomaly["severity"],
+                    method=anomaly["method"],
+                )
+            )
+
+        source.dataset_id = record.id
+        source.last_sync_at = datetime.now(timezone.utc)
+        source.ingestion_status = "success"
+
+        # This is a snapshot row count, not yet an incremental checkpoint.
+        source.last_checkpoint = str(len(df))
+
+        db.commit()
+        db.refresh(record)
+
+        return {
+            "success": True,
+            "message": (
+                "Database dataset updated successfully."
+                if not is_new_dataset
+                else "Database dataset created successfully."
+            ),
+            "source_id": source.id,
+            "dataset_id": record.id,
+            "updated_existing": not is_new_dataset,
+            "filename": record.filename,
+            "row_count": record.row_count,
+            "column_count": record.column_count,
+            "profile": record.profile,
+            "quality": record.quality,
+            "quality_score": record.quality_score,
+            "quality_status": record.quality_status,
+            "anomaly_count": len(anomalies),
+            "created_at": record.created_at,
+            "last_sync_at": source.last_sync_at,
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as exc:
+        db.rollback()
+
+        print(f"Database ingestion failed: {exc}")
+
+        failed_source = db.get(DatabaseSource, source_id)
+
+        if failed_source is not None:
+            failed_source.ingestion_status = "failed"
+            db.commit()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Database ingestion failed. Check backend logs.",
+        ) from exc
+
+    finally:
+        engine.dispose()
 

@@ -63,6 +63,31 @@ function App() {
   const [notice, setNotice] = useState('')
 
   const selectedId = datasetId || result?.id || ''
+  const selectedDataset = datasets.find(
+    (d) => String(d.id) === String(selectedId)
+  )
+
+  const selectedFilename = (
+    selectedDataset?.filename ?? detail?.dataset ?? result?.dataset ?? ''
+  ).toLowerCase()
+
+  const isDatabaseDataset =
+  selectedDataset?.source_type === 'database' ||
+  detail?.source_type === 'database'
+
+  const [sourceMode, setSourceMode] = useState('csv')
+  const [liveAnomalyCount, setLiveAnomalyCount] = useState(0)
+  const [lastLiveRefresh, setLastLiveRefresh] = useState(null)
+
+  useEffect(() => {
+    if (!selectedId) return
+
+    if (isDatabaseDataset) {
+      setSourceMode('database')
+    } else if (selectedFilename.endsWith('.csv')) {
+      setSourceMode('csv')
+    }
+  }, [selectedId, isDatabaseDataset, selectedFilename])
   const quality = detail?.quality ?? result?.quality
   const columnQualityRows = quality?.column_profiles ?? []
   const whitespaceIssues = Object.entries(
@@ -90,22 +115,79 @@ function App() {
 
   useEffect(() => { refreshDatasets() }, []) // initial dataset list
 
-  const loadDataset = useCallback(async (id) => {
-    if (!id) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const response = await api.get(`/api/datasets/${id}`)
-      setDetail(response.data)
-    } catch (err) {
-      setDetail(null); setError(errorText(err))
-    } finally { setBusy(false) }
-  }, [])
+const loadDataset = useCallback(async (id) => {
+  if (!id) return
+
+  try {
+    const response = await api.get(`/api/datasets/${id}`)
+    setDetail(response.data)
+  } catch (err) {
+    setDetail(null)
+    setError(errorText(err))
+  }
+}, [])
 
   useEffect(() => {
     if (selectedId) loadDataset(selectedId)
     else setDetail(null)
   }, [selectedId, loadDataset])
 
+
+  // Automatically refresh the selected database dataset every 5 seconds.
+useEffect(() => {
+  if (sourceMode !== 'database' || !selectedId) {
+    return
+  }
+
+  let active = true
+  let refreshing = false
+
+  const refreshLiveData = async () => {
+    if (refreshing) return
+
+    refreshing = true
+
+    try {
+      const [detailResponse, listResponse, anomalyResponse] =
+        await Promise.all([
+          api.get(`/api/datasets/${selectedId}`),
+          api.get('/api/datasets'),
+          api.get(`/api/datasets/${selectedId}/anomalies`),
+        ])
+
+      if (!active) return
+
+      setDetail(detailResponse.data)
+      setDatasets(listResponse.data ?? [])
+
+      setLiveAnomalyCount(
+        anomalyResponse.data.anomaly_count ??
+        anomalyResponse.data.anomalies?.length ??
+        0
+      )
+
+      setLastLiveRefresh(new Date())
+
+    } catch (err) {
+      console.error('Live refresh failed:', err)
+    } finally {
+      refreshing = false
+    }
+  }
+
+  refreshLiveData()
+
+  const intervalId = window.setInterval(
+    refreshLiveData,
+    5000
+  )
+
+  return () => {
+    active = false
+    window.clearInterval(intervalId)
+  }
+
+}, [sourceMode, selectedId])
   async function analyzeFile(event) {
     event.preventDefault()
     if (!file) { setError('Choose a CSV file first.'); return }
@@ -249,27 +331,263 @@ async function detectAnomalies(event) {
       {notice && <div className="alert success-alert"><CheckCircle2 size={18} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notice">×</button></div>}
       {busy && <div className="loading-line"><LoaderCircle size={16} className="spin" /> Working with the backend…</div>}
 
-      {page === 'overview' && <>
-        <section className="stats-grid">
-          <StatCard label="Quality score" value={quality ? `${quality.quality_score}%` : '—'} note={quality?.status ?? 'Analyze a CSV to begin'} icon={ShieldCheck} />
-          <StatCard label="Missing cells" value={quality?.missing_cells ?? '—'} note="Empty or missing values" icon={AlertTriangle} />
-          <StatCard label="Duplicate rows" value={quality?.duplicate_rows ?? '—'} note="Repeated complete rows" icon={Database} />
-          <StatCard label="Rows analyzed" value={profile?.row_count ?? '—'} note={profile ? `${profile.column_count} columns detected` : 'Dataset size'} icon={FileSpreadsheet} />
-        </section>
-        <section className="content-grid">
-          <article className="panel"><div className="panel-title"><div><h2>Analyze a dataset</h2><p>Upload a CSV file to save a profile and quality report.</p></div><Upload size={22} /></div>
-            <form onSubmit={analyzeFile}><label className="upload-zone"><Upload size={32} /><strong>{file ? file.name : 'Choose a CSV file'}</strong><span>{file ? `${(file.size / 1024).toFixed(1)} KB selected` : 'Browse your computer for a .csv file'}</span><input type="file" accept=".csv,text/csv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError('') }} /></label><button className="primary-button" type="submit" disabled={busy}>{busy ? 'Processing…' : 'Analyze dataset'}</button></form>
-            {result && <div className="result-summary"><CheckCircle2 size={20} /><div><strong>Analysis complete</strong><p>Dataset ID: {result.id} · {result.dataset}</p></div></div>}
-          </article>
-          <article className="panel"><div className="panel-title"><div><h2>Dataset profile</h2><p>Columns in the active dataset.</p></div><FileSpreadsheet size={22} /></div>
-            {columnRows.length ? <DataTable columns={[{ key: 'name', label: 'Column' }, { key: 'type', label: 'Data type' }, { key: 'missing', label: 'Missing' }]} rows={columnRows} /> : <EmptyState title="No dataset selected" detail="Upload a CSV or choose a saved dataset above." />}
-          </article>
-        </section>
-        {detail && <section className="panel details-panel"><div className="panel-title"><div><h2>Latest quality report</h2><p>{detail.dataset} · Dataset ID {detail.id}</p></div><span className={`quality-pill ${(quality?.status ?? '').toLowerCase()}`}>{quality?.status ?? 'Unknown'}</span></div>
-          <div className="report-grid"><div><span>Rows</span><strong>{profile?.row_count ?? '—'}</strong></div><div><span>Columns</span><strong>{profile?.column_count ?? '—'}</strong></div><div><span>Quality score</span><strong>{quality?.quality_score ?? '—'}/100</strong></div><div><span>Missing cells</span><strong>{quality?.missing_cells ?? '—'}</strong></div></div>
-          <h3>Missing values by column</h3><DataTable columns={[{ key: 'column', label: 'Column' }, { key: 'count', label: 'Missing values' }]} rows={missingRows} emptyText="No missing-value counts are available." />
-        </section>}
-      </>}
+      
+{page === 'overview' && <>
+  <section className="source-mode-section">
+    <div className="source-mode-heading">
+      <h2>Choose your data source</h2>
+      <p>Analyze uploaded files or monitor a connected database.</p>
+    </div>
+
+    <div className="source-mode-grid">
+      <button
+        className={`source-mode-card ${sourceMode === 'csv' ? 'selected csv-mode' : ''}`}
+        onClick={() => setSourceMode('csv')}
+        type="button"
+      >
+        <div className="source-mode-icon csv-icon">
+          <FileSpreadsheet size={25} />
+        </div>
+        <div className="source-mode-copy">
+          <strong>CSV Analysis</strong>
+          <span>Upload CSV files and analyze data quality, profiles and anomalies.</span>
+          <small>STATIC DATASET ANALYSIS</small>
+        </div>
+        <span className="mode-indicator">
+          {sourceMode === 'csv' ? 'Selected' : 'Select'}
+        </span>
+      </button>
+
+      <button
+        className={`source-mode-card ${sourceMode === 'database' ? 'selected database-mode' : ''}`}
+        onClick={() => setSourceMode('database')}
+        type="button"
+      >
+        <div className="source-mode-icon database-icon">
+          <Database size={25} />
+        </div>
+        <div className="source-mode-copy">
+          <strong>Live Database</strong>
+          <span>Connect PostgreSQL or MySQL and analyze records from database tables.</span>
+          <small>DATABASE MONITORING</small>
+        </div>
+        <span className="mode-indicator">
+          {sourceMode === 'database' ? 'Selected' : 'Select'}
+        </span>
+      </button>
+    </div>
+  </section>
+
+  <section className="stats-grid">
+    <StatCard
+      label="Quality score"
+      value={quality ? `${quality.quality_score}%` : '—'}
+      note={quality?.status ?? 'Select a dataset'}
+      icon={ShieldCheck}
+    />
+    <StatCard
+      label="Missing cells"
+      value={quality?.missing_cells ?? '—'}
+      note="Empty or missing values"
+      icon={AlertTriangle}
+    />
+    <StatCard
+      label="Duplicate rows"
+      value={quality?.duplicate_rows ?? '—'}
+      note="Repeated complete rows"
+      icon={Database}
+    />
+    <StatCard
+      label="Rows analyzed"
+      value={profile?.row_count ?? '—'}
+      note={profile ? `${profile.column_count} columns detected` : 'Dataset size'}
+      icon={FileSpreadsheet}
+    />
+    {sourceMode === 'database' && (
+  <StatCard
+    label="Anomalies detected"
+    value={liveAnomalyCount}
+    note="Latest database snapshot"
+    icon={AlertTriangle}
+  />
+)}
+  </section>
+
+  <section className="content-grid">
+    {sourceMode === 'csv' ? (
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Analyze a CSV dataset</h2>
+            <p>Upload a CSV file to generate a profile and quality report.</p>
+          </div>
+          <Upload size={22} />
+        </div>
+
+        <form onSubmit={analyzeFile}>
+          <label className="upload-zone">
+            <Upload size={32} />
+            <strong>{file ? file.name : 'Choose a CSV file'}</strong>
+            <span>
+              {file
+                ? `${(file.size / 1024).toFixed(1)} KB selected`
+                : 'Browse your computer for a .csv file'}
+            </span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null)
+                setError('')
+              }}
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={busy}
+          >
+            {busy ? 'Processing…' : 'Analyze CSV dataset'}
+          </button>
+        </form>
+
+        {result && (
+          <div className="result-summary">
+            <CheckCircle2 size={20} />
+            <div>
+              <strong>Analysis complete</strong>
+              <p>Dataset ID: {result.id} · {result.dataset}</p>
+            </div>
+          </div>
+        )}
+      </article>
+    ) : (
+      <article className="panel database-monitor-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Database monitoring</h2>
+            <p>Analyze data from your connected database source.</p>
+          </div>
+          <Database size={22} />
+        </div>
+
+        {isDatabaseDataset ? (
+          <>
+            <div className="database-source-status">
+              <span className="status-dot" />
+              <strong>Database dataset selected</strong>
+            </div>
+
+            <div className="database-source-details">
+              <div>
+                <span>Selected dataset</span>
+                <strong>{selectedDataset?.filename ?? detail?.dataset}</strong>
+              </div>
+              <div>
+                <span>Dataset ID</span>
+                <strong>#{selectedId}</strong>
+              </div>
+              <div>
+                <span>Records analyzed</span>
+                <strong>{profile?.row_count ?? '—'}</strong>
+              </div>
+              <div>
+                <span>Columns detected</span>
+                <strong>{profile?.column_count ?? '—'}</strong>
+              </div>
+            </div>
+
+            <div className="database-info">
+              <Activity size={19} />
+              <span>
+                Database metrics refresh automatically every 5 seconds.
+              </span>
+            </div>
+            {lastLiveRefresh && (
+  <div className="live-refresh-indicator">
+    <span className="status-dot" />
+    Last dashboard refresh: {lastLiveRefresh.toLocaleTimeString()}
+  </div>
+)}
+          </>
+        ) : (
+          <EmptyState
+            title="No database dataset selected"
+            detail="Connect a database, browse its tables and select a table to begin."
+          />
+        )}
+
+        <button
+          className="primary-button database-action"
+          type="button"
+          onClick={() => setPage('connections')}
+        >
+          <Database size={16} />
+          Open Database Connections
+        </button>
+      </article>
+    )}
+
+    <article className="panel">
+      <div className="panel-title">
+        <div>
+          <h2>Dataset profile</h2>
+          <p>Columns and data types in the active dataset.</p>
+        </div>
+        <FileSpreadsheet size={22} />
+      </div>
+
+      {columnRows.length ? (
+        <DataTable
+          columns={[
+            { key: 'name', label: 'Column' },
+            { key: 'type', label: 'Data type' },
+            { key: 'missing', label: 'Missing' },
+          ]}
+          rows={columnRows}
+        />
+      ) : (
+        <EmptyState
+          title="No dataset selected"
+          detail="Upload a CSV or choose a saved database dataset."
+        />
+      )}
+    </article>
+  </section>
+
+  {detail && (
+    <section className="panel details-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Latest quality report</h2>
+          <p>{detail.dataset} · Dataset ID {detail.id}</p>
+        </div>
+        <span className={`quality-pill ${(quality?.status ?? '').toLowerCase()}`}>
+          {quality?.status ?? 'Unknown'}
+        </span>
+      </div>
+
+      <div className="report-grid">
+        <div><span>Rows</span><strong>{profile?.row_count ?? '—'}</strong></div>
+        <div><span>Columns</span><strong>{profile?.column_count ?? '—'}</strong></div>
+        <div><span>Quality score</span><strong>{quality?.quality_score ?? '—'}/100</strong></div>
+        <div><span>Missing cells</span><strong>{quality?.missing_cells ?? '—'}</strong></div>
+      </div>
+
+      <h3>Missing values by column</h3>
+      <DataTable
+        columns={[
+          { key: 'column', label: 'Column' },
+          { key: 'count', label: 'Missing values' },
+        ]}
+        rows={missingRows}
+        emptyText="No missing-value counts are available."
+      />
+    </section>
+  )}
+</>}
+
 
       
 {page === 'quality' && <section className="panel">
