@@ -1,0 +1,6 @@
+id,name,amount,constant_field
+1,Alice,100,Active
+2,Bob,200,Active
+3,Alice,100,Active
+4,,300,Active
+5,David,400,Active

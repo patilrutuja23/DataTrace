@@ -1,9 +1,11 @@
+import AskDataTrace from './AskDataTrace'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   Activity, AlertTriangle, ArrowDownRight, BarChart3, CheckCircle2,
   ChevronRight, Database, FileSpreadsheet, GitBranch, LayoutDashboard,
-  LoaderCircle, RefreshCw, Search, ShieldCheck, Upload, Workflow,
+   LoaderCircle, RefreshCw, Search, ShieldCheck, Upload, Workflow,
+  Bot, Send, UserRound, Trash2,
 } from 'lucide-react'
 import './App.css'
 import DatabaseConnections from './DatabaseConnections'
@@ -18,6 +20,7 @@ const NAV_ITEMS = [
   { id: 'lineage', label: 'Data Lineage', icon: GitBranch },
   { id: 'investigation', label: 'Root Cause & Impact', icon: Activity },
   { id: 'connections', label: 'Database Connections', icon: Database },
+  { id: 'ask', label: 'Ask DataTrace', icon: Bot },
 ]
 
 function errorText(error) {
@@ -740,7 +743,12 @@ async function detectAnomalies(event) {
           {impact?.error ? <div className="alert error-alert">{impact.error} Make sure Neo4j is running and lineage has been synced.</div> : <><div className="section-summary"><strong>{impact?.impacted_asset_count ?? impactedAssets.length}</strong><span>impacted assets</span></div><DataTable columns={[{ key: 'name', label: 'Asset' }, { key: 'type', label: 'Type' }, { key: 'path_relationships', label: 'Path', render: (v) => Array.isArray(v) ? v.join(' → ') : '—' }]} rows={impactedAssets} emptyText="No downstream impact returned. Create lineage and sync it to Neo4j first." /></>}
         </section>
       </>}
-      
+      {page === 'ask' && (
+  <AskDataTrace
+    datasetId={selectedId}
+    datasetName={selectedDataset?.filename || selectedDataset?.name}
+  />
+)}
       {page === 'connections' && <DatabaseConnections />}
       <footer>DataTrace AI · Data quality, anomaly detection, lineage, and investigation</footer>
     </main>

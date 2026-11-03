@@ -41,6 +41,7 @@ from app.graph.lineage_graph_service import (
 )
 from app.database.models import AnomalyRecord
 from app.rca.rca_engine import analyze_root_cause
+from app.ai.ask_service import ask_ollama
 from app.graph.impact_service import get_downstream_impact
 from app.database import models
 from app.database.models import AnomalyRecord, PipelineExecutionRecord
@@ -823,3 +824,146 @@ def get_pipeline_executions(
         }
         for record in records
     ]
+
+class AskDataTraceRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+    )
+
+
+@app.post("/api/datasets/{dataset_id}/ask")
+async def ask_datatrace(
+    dataset_id: int,
+    payload: AskDataTraceRequest,
+    db: Session = Depends(get_db),
+):
+    question = payload.question.strip()
+
+    if not question:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a question.",
+        )
+
+    dataset = db.get(DatasetRecord, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset analysis not found.",
+        )
+
+    # Retrieve all stored anomalies for this dataset.
+    anomaly_records = db.scalars(
+        select(AnomalyRecord)
+        .where(AnomalyRecord.dataset_id == dataset_id)
+        .order_by(AnomalyRecord.id)
+    ).all()
+
+    anomalies = [
+        {
+            "column_name": record.column_name,
+            "row_index": record.row_index,
+            "observed_value": record.observed_value,
+            "lower_bound": record.lower_bound,
+            "upper_bound": record.upper_bound,
+            "direction": record.direction,
+            "severity": record.severity,
+            "method": record.method,
+        }
+        for record in anomaly_records
+    ]
+
+    # Generate existing rule-based RCA findings.
+    dataset_data = {
+        "id": dataset.id,
+        "filename": dataset.filename,
+        "profile": dataset.profile or {},
+        "quality": dataset.quality or {},
+    }
+
+    rca_results = analyze_root_cause(
+        dataset_data,
+        anomalies,
+    )
+
+    # Retrieve the 10 most recent pipeline executions.
+    pipeline_records = db.scalars(
+        select(PipelineExecutionRecord)
+        .where(
+            PipelineExecutionRecord.dataset_id == dataset_id
+        )
+        .order_by(PipelineExecutionRecord.id.desc())
+        .limit(10)
+    ).all()
+
+    pipeline_executions = [
+        {
+            "dag_id": record.dag_id,
+            "dag_run_id": record.dag_run_id,
+            "state": record.state,
+            "task_states": record.task_states,
+            "started_at": record.started_at,
+            "finished_at": record.finished_at,
+            "error_summary": record.error_summary,
+        }
+        for record in pipeline_records
+    ]
+
+   # Prepare evidence for the Groq AI model.
+    context = {
+        "dataset": {
+            "id": dataset.id,
+            "filename": dataset.filename,
+            "row_count": dataset.row_count,
+            "column_count": dataset.column_count,
+        },
+        "profile": dataset.profile or {},
+        "quality": dataset.quality or {},
+        "anomaly_summary": {
+            "total_count": len(anomalies),
+            "high_severity_count": sum(
+                1 for item in anomalies
+                if item["severity"] == "HIGH"
+            ),
+            "medium_severity_count": sum(
+                1 for item in anomalies
+                if item["severity"] == "MEDIUM"
+            ),
+            "affected_columns": sorted({
+                item["column_name"]
+                for item in anomalies
+            }),
+            "examples": anomalies[:30],
+        },
+        "root_cause_analysis": rca_results,
+        "pipeline_executions": pipeline_executions,
+    }
+
+    try:
+        answer = await ask_ollama(
+            question=question,
+            context=context,
+        )
+
+        return {
+            "dataset_id": dataset_id,
+            "dataset_name": dataset.filename,
+            "question": question,
+            "answer": answer,
+            "model": "openai/gpt-oss-20b",
+        }
+
+    except Exception as exc:
+        print(f"[ASK DATATRACE ERROR] {exc}")
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+    "Ask DataTrace is temporarily unavailable. "
+    "Check your Groq API key, internet connection, "
+    "and Groq service availability."
+),
+        ) from exc
